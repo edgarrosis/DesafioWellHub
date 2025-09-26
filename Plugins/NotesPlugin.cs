@@ -10,10 +10,10 @@ public class NotesPlugin
     private readonly ISummarizer _summarizer;
     private const string Key = "notes";
 
-    public NotesPlugin(JsonMemoryStore store, ISummarizer? summarizer = null)
+    public NotesPlugin(JsonMemoryStore store, ISummarizer summarizer)
     {
         _store = store;
-        _summarizer = summarizer ?? new DeterministicSummarizer();
+        _summarizer = summarizer ?? throw new ArgumentNullException(nameof(summarizer));
     }
 
     public record Note(string Content, DateTime CreatedAt);
@@ -50,7 +50,7 @@ public class NotesPlugin
             found.Select(x => $"{x.idx}. {Trim(x.note.Content, 80)}"));
     }
 
-    [KernelFunction, Description("Resumo curto (via ISummarizer, sem LLM)")]
+    [KernelFunction, Description("Gera um resumo curto da nota")]
     public async Task<string> SummarizeNote([Description("Índice da nota (1-based)")] int index)
     {
         var list = await _store.LoadListAsync<Note>(Key);

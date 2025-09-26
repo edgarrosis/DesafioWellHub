@@ -16,4 +16,8 @@
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.65.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="data/" />
+  </ItemGroup>
+
 </Project>

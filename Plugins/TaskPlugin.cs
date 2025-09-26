@@ -7,9 +7,14 @@ namespace SkOfflineCourse.Plugins;
 public class TaskPlugin
 {
     private readonly JsonMemoryStore _store;
+    private readonly Kernel _kernel;
     private const string Key = "tasks";
 
-    public TaskPlugin(JsonMemoryStore store) => _store = store;
+    public TaskPlugin(JsonMemoryStore store, Kernel kernel)
+    {
+        _store = store;
+        _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
+    }
 
     public record TaskItem(string Title, bool Done);
 
@@ -42,12 +47,34 @@ public class TaskPlugin
         return $"🎉 Concluída: {item.Title}";
     }
 
-    [KernelFunction, Description("Sugere próxima tarefa (heurística simples)")]
+    [KernelFunction, Description("Sugere próxima tarefa usando IA")]
     public async Task<string> RecommendNext()
     {
         var list = await _store.LoadListAsync<TaskItem>(Key);
-        var next = list.FindIndex(t => !t.Done);
-        if (next == -1) return "😎 Tudo em dia!";
-        return $"➡️ Próxima tarefa sugerida: {next+1}. {list[next].Title}";
+        
+        // Se não houver tarefas pendentes
+        var pendingTasks = list.Where(t => !t.Done).ToList();
+        if (pendingTasks.Count == 0) return "😎 Tudo em dia!";
+        
+        // Versão com IA
+        var allTasksText = string.Join("\n", list.Select((t, i) => 
+            $"{i+1}. [{(t.Done ? "CONCLUÍDA" : "PENDENTE")}] {t.Title}"));
+        
+        var prompt = $@"
+Com base na lista de tarefas abaixo, recomende qual seria a mais importante a ser feita em seguida.
+Considere fatores como: tarefas já concluídas, prioridades implícitas, e dependências lógicas.
+Escolha apenas entre as tarefas PENDENTES.
+
+LISTA DE TAREFAS:
+{allTasksText}
+
+Forneça sua recomendação com o seguinte formato:
+'Recomendo a tarefa X: [título da tarefa]' (onde X é o número da tarefa)
+";
+
+        var result = await _kernel.InvokePromptAsync(prompt);
+        var recommendation = result.ToString().Trim();
+        
+        return $"🤖 {recommendation}";
     }
 }
