@@ -67,39 +67,87 @@ Se a entrada não corresponder a nenhuma função, retorne plugin e function com
             
             if (jsonStart >= 0 && jsonEnd > jsonStart)
             {
-                var json = response.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                var routeInfo = JsonSerializer.Deserialize<RouteInfo>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var jsonRaw = response.Substring(jsonStart, jsonEnd - jsonStart + 1);
                 
-                if (routeInfo != null && !string.IsNullOrEmpty(routeInfo.Plugin) && !string.IsNullOrEmpty(routeInfo.Function))
+                // Tenta fazer o parsing do JSON
+                var options = new JsonSerializerOptions { 
+                    PropertyNameCaseInsensitive = true,
+                    AllowTrailingCommas = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip
+                };
+                
+                try 
                 {
-                    // Verificar se o plugin e função existem
-                    if (_pluginFunctions.TryGetValue(routeInfo.Plugin, out var functions) && 
-                        functions.Contains(routeInfo.Function, StringComparer.OrdinalIgnoreCase))
+                    var routeInfo = JsonSerializer.Deserialize<RouteInfo>(jsonRaw, options);
+                
+                    if (routeInfo != null && !string.IsNullOrEmpty(routeInfo.Plugin) && !string.IsNullOrEmpty(routeInfo.Function))
                     {
-                        // Adicionar parâmetros ao KernelArguments
-                        if (routeInfo.Parameters != null)
+                        // Verificar se o plugin e função existem
+                        if (_pluginFunctions.TryGetValue(routeInfo.Plugin, out var functions) && 
+                            functions.Contains(routeInfo.Function, StringComparer.OrdinalIgnoreCase))
                         {
-                            foreach (var param in routeInfo.Parameters)
+                            // Adicionar parâmetros ao KernelArguments
+                            if (routeInfo.Parameters != null)
                             {
-                                args[param.Key] = param.Value?.ToString();
+                                foreach (var param in routeInfo.Parameters)
+                                {
+                                    args[param.Key] = param.Value?.ToString();
+                                }
+                            }
+                            
+                            // Tratamentos específicos para parâmetros comuns
+                            if (routeInfo.Function.Equals("AddTask", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("title"))
+                            {
+                                // Extrair título da tarefa da entrada do usuário
+                                var title = ExtractContentAfterKeyword(input, "tarefa");
+                                args["title"] = string.IsNullOrWhiteSpace(title) ? "Sem título" : title;
+                            }
+                            else if (routeInfo.Function.Equals("AddNote", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("content"))
+                            {
+                                // Extrair conteúdo da nota da entrada do usuário
+                                var content = ExtractContentAfterKeyword(input, "nota");
+                                args["content"] = string.IsNullOrWhiteSpace(content) ? "Vazio" : content;
+                            }
+                            
+                            return (routeInfo.Plugin, routeInfo.Function, args);
+                        }
+                    }
+                }
+                catch (JsonException jex)
+                {
+                    Console.WriteLine($"Erro ao analisar JSON da resposta do modelo: {jex.Message}");
+                    // Tenta limpar o JSON de caracteres problemáticos e tentar novamente
+                    try
+                    {
+                        string cleanedJson = jsonRaw
+                            .Replace("\\", "\\\\")  // Escape backslashes
+                            .Replace("\r", "")      // Remove carriage returns
+                            .Replace("\n", " ")     // Replace newlines with spaces
+                            .Replace("/", "\\/");   // Escape forward slashes
+                            
+                        var routeInfo = JsonSerializer.Deserialize<RouteInfo>(cleanedJson, options);
+                        
+                        if (routeInfo != null && !string.IsNullOrEmpty(routeInfo.Plugin) && !string.IsNullOrEmpty(routeInfo.Function))
+                        {
+                            if (_pluginFunctions.TryGetValue(routeInfo.Plugin, out var functions) && 
+                                functions.Contains(routeInfo.Function, StringComparer.OrdinalIgnoreCase))
+                            {
+                                // Processar parâmetros
+                                if (routeInfo.Parameters != null)
+                                {
+                                    foreach (var param in routeInfo.Parameters)
+                                    {
+                                        args[param.Key] = param.Value?.ToString();
+                                    }
+                                }
+                                
+                                return (routeInfo.Plugin, routeInfo.Function, args);
                             }
                         }
-                        
-                        // Tratamentos específicos para parâmetros comuns
-                        if (routeInfo.Function.Equals("AddTask", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("title"))
-                        {
-                            // Extrair título da tarefa da entrada do usuário
-                            var title = ExtractContentAfterKeyword(input, "tarefa");
-                            args["title"] = string.IsNullOrWhiteSpace(title) ? "Sem título" : title;
-                        }
-                        else if (routeInfo.Function.Equals("AddNote", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("content"))
-                        {
-                            // Extrair conteúdo da nota da entrada do usuário
-                            var content = ExtractContentAfterKeyword(input, "nota");
-                            args["content"] = string.IsNullOrWhiteSpace(content) ? "Vazio" : content;
-                        }
-                        
-                        return (routeInfo.Plugin, routeInfo.Function, args);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Falha na segunda tentativa de parsing do JSON: {ex.Message}");
                     }
                 }
             }
