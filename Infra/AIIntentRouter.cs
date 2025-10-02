@@ -26,61 +26,7 @@ public class AIIntentRouter
 
         try
         {
-            var prompt = @$"
-Você é um assistente especializado em diagnóstico de check-ins da WellHub. Sua função é identificar intenções do usuário relacionadas à verificação de transações e status de check-in.
-
-Analise a entrada do usuário e determine qual função deve ser chamada de acordo com as seguintes opções disponíveis:
-
-Plugin WellhubTransaction:
-- VerifyCheckinStatus: Verifica o status de check-in e transação de um usuário
-  Parâmetros obrigatórios:
-  • userId: ID único do usuário (string)
-  • partnerId: ID do parceiro/estabelecimento (string) 
-  • timestamp: Data e hora do check-in no formato yyyy-MM-ddTHH:mm:ss (string)
-
-- ListSimulatedRecords: Lista todos os registros simulados disponíveis para teste
-  Parâmetros: nenhum
-
-EXEMPLOS DE ENTRADA VÁLIDAS:
-- ""Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00""
-- ""Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00""
-- ""Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00""
-- ""Mostre os registros de teste disponíveis""
-- ""Liste os dados simulados""
-
-PADRÕES DE EXTRAÇÃO:
-- Procure por IDs de usuário (user + números, ou apenas números)
-- Procure por IDs de parceiro (partner + números, estabelecimento, local)  
-- Procure por timestamps no formato ISO ou data/hora mencionados
-- Palavras-chave: check-in, transação, status, verificar, consultar, parceiro, usuário
-
-Entrada do usuário: {input}
-
-Responda APENAS em formato JSON válido:
-
-Para verificar check-in:
-{{
-  ""plugin"": ""WellhubTransaction"",
-  ""function"": ""VerifyCheckinStatus"",
-  ""parameters"": {{
-    ""userId"": ""[ID do usuário extraído]"",
-    ""partnerId"": ""[ID do parceiro extraído]"",
-    ""timestamp"": ""[timestamp no formato yyyy-MM-ddTHH:mm:ss]""
-  }}
-}}
-
-Para listar registros:
-{{
-  ""plugin"": ""WellhubTransaction"",
-  ""function"": ""ListSimulatedRecords""
-}}
-
-Se não corresponder a nenhuma função:
-{{
-  ""plugin"": null,
-  ""function"": null
-}}
-";
+            var prompt = GetWellhubIntentPromptTemplate(input);
 
             var result = await _kernel.InvokePromptAsync(prompt);
             var response = result.ToString().Trim();
@@ -384,6 +330,68 @@ Se não corresponder a nenhuma função:
         }
 
         return (null, null, args);
+    }
+
+    /// <summary>
+    /// Retorna o template de prompt otimizado para roteamento de intenções da WellHub
+    /// </summary>
+    private string GetWellhubIntentPromptTemplate(string input)
+    {
+        return @$"
+Você é um assistente especializado em diagnóstico de check-ins da WellHub. Sua função é identificar intenções do usuário relacionadas à verificação de transações e status de check-in.
+
+Analise a entrada do usuário e determine qual função deve ser chamada de acordo com as seguintes opções disponíveis:
+
+Plugin WellhubTransaction:
+- VerifyCheckinStatus: Verifica o status de check-in e transação de um usuário
+  Parâmetros obrigatórios:
+  • userId: ID único do usuário (string)
+  • partnerId: ID do parceiro/estabelecimento (string) 
+  • timestamp: Data e hora do check-in no formato yyyy-MM-ddTHH:mm:ss (string)
+
+- ListSimulatedRecords: Lista todos os registros simulados disponíveis para teste
+  Parâmetros: nenhum
+
+EXEMPLOS DE ENTRADA VÁLIDAS:
+- ""Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00""
+- ""Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00""
+- ""Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00""
+- ""Mostre os registros de teste disponíveis""
+- ""Liste os dados simulados""
+
+PADRÕES DE EXTRAÇÃO:
+- Procure por IDs de usuário (user + números, ou apenas números)
+- Procure por IDs de parceiro (partner + números, estabelecimento, local)  
+- Procure por timestamps no formato ISO ou data/hora mencionados
+- Palavras-chave: check-in, transação, status, verificar, consultar, parceiro, usuário
+
+Entrada do usuário: {input}
+
+Responda APENAS em formato JSON válido:
+
+Para verificar check-in:
+{{
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""VerifyCheckinStatus"",
+  ""parameters"": {{
+    ""userId"": ""[ID do usuário extraído]"",
+    ""partnerId"": ""[ID do parceiro extraído]"",
+    ""timestamp"": ""[timestamp no formato yyyy-MM-ddTHH:mm:ss]""
+  }}
+}}
+
+Para listar registros:
+{{
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""ListSimulatedRecords""
+}}
+
+Se não corresponder a nenhuma função:
+{{
+  ""plugin"": null,
+  ""function"": null
+}}
+";
     }
 
     private class RouteInfo

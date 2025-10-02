@@ -44,6 +44,13 @@ public class WellhubTransactionPlugin
     {
         try
         {
+            // Validação de parâmetros obrigatórios
+            var validationResult = ValidateCheckinParameters(userId, partnerId, timestamp);
+            if (validationResult != null)
+            {
+                return JsonSerializer.Serialize(validationResult);
+            }
+
             // Simula latência de uma consulta real ao backend
             await Task.Delay(100);
 
@@ -116,8 +123,8 @@ public class WellhubTransactionPlugin
     /// </summary>
     private CheckinResult SimulateRandomResult(string userId)
     {
-        // Usa o hash do userId para gerar resultados consistentes mas variados
-        var hash = userId.GetHashCode();
+        // Usa hash estável baseado nos bytes da string para consistência entre execuções
+        var hash = ComputeStableHash(userId);
         var scenario = Math.Abs(hash) % 3;
 
         return scenario switch
@@ -126,6 +133,58 @@ public class WellhubTransactionPlugin
             1 => new CheckinResult("FALHA_TRANSACAO", $"Erro de transação - Código: TXN_{Math.Abs(hash) % 100:D3}"),
             _ => new CheckinResult("NAO_LOCALIZADO", "Registro de check-in não encontrado na base de dados.")
         };
+    }
+
+    /// <summary>
+    /// Valida os parâmetros de entrada para verificação de check-in
+    /// </summary>
+    private static CheckinResult? ValidateCheckinParameters(string userId, string partnerId, string timestamp)
+    {
+        // Validação de userId
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", "UserId é obrigatório e não pode estar vazio.");
+        }
+
+        // Validação de partnerId
+        if (string.IsNullOrWhiteSpace(partnerId))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", "PartnerId é obrigatório e não pode estar vazio.");
+        }
+
+        // Validação de timestamp
+        if (string.IsNullOrWhiteSpace(timestamp))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", "Timestamp é obrigatório e não pode estar vazio.");
+        }
+
+        // Validação de formato de timestamp
+        if (!DateTime.TryParse(timestamp, out _))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", 
+                "Timestamp deve estar no formato válido (ex: 2024-10-02T10:00:00).");
+        }
+
+        return null; // Todos os parâmetros são válidos
+    }
+
+    /// <summary>
+    /// Computa um hash estável baseado nos bytes da string para garantir consistência entre execuções
+    /// </summary>
+    private static int ComputeStableHash(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return 0;
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(input);
+        int hash = 17;
+        
+        foreach (byte b in bytes)
+        {
+            hash = hash * 31 + b;
+        }
+        
+        return hash;
     }
 }
 
