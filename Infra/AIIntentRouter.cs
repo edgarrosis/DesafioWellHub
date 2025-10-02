@@ -13,7 +13,8 @@ public class AIIntentRouter
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
         _pluginFunctions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords" } }
+            { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords" } },
+            { "WellhubCommunication", new List<string> { "GenerateResolutionMessage", "GenerateTemplatedResponse", "AdjustMessageTone" } }
         };
     }
 
@@ -27,36 +28,29 @@ public class AIIntentRouter
         try
         {
             var prompt = @$"
-Você é um assistente especializado em diagnóstico de check-ins da WellHub. Sua função é identificar intenções do usuário relacionadas à verificação de transações e status de check-in.
+Você é um assistente especializado da WellHub para diagnóstico de check-ins e comunicação humanizada.
 
-Analise a entrada do usuário e determine qual função deve ser chamada de acordo com as seguintes opções disponíveis:
+Analise a entrada do usuário e determine qual função chamar:
 
 Plugin WellhubTransaction:
-- VerifyCheckinStatus: Verifica o status de check-in e transação de um usuário
-  Parâmetros obrigatórios:
-  • userId: ID único do usuário (string)
-  • partnerId: ID do parceiro/estabelecimento (string) 
-  • timestamp: Data e hora do check-in no formato yyyy-MM-ddTHH:mm:ss (string)
+- VerifyCheckinStatus: Verifica status de check-in (parâmetros: userId, partnerId, timestamp)
+- ListSimulatedRecords: Lista registros de teste (sem parâmetros)
 
-- ListSimulatedRecords: Lista todos os registros simulados disponíveis para teste
-  Parâmetros: nenhum
+Plugin WellhubCommunication:
+- GenerateResolutionMessage: Gera resposta humanizada (parâmetros: caseContext, actionTaken, resultStatus)
+- GenerateTemplatedResponse: Usa templates específicos (parâmetros: scenarioType, customerName, situationDetails)
+- AdjustMessageTone: Ajusta tom da mensagem (parâmetros: originalMessage, urgencyLevel, sensitivityLevel)
 
-EXEMPLOS DE ENTRADA VÁLIDAS:
-- ""Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00""
-- ""Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00""
-- ""Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00""
-- ""Mostre os registros de teste disponíveis""
-- ""Liste os dados simulados""
+EXEMPLOS:
+- ""Verifique user123 partner456"" → WellhubTransaction.VerifyCheckinStatus
+- ""Liste os dados"" → WellhubTransaction.ListSimulatedRecords
+- ""Gere resposta para cliente com cobrança"" → WellhubCommunication.GenerateResolutionMessage
+- ""Use template reembolso para João"" → WellhubCommunication.GenerateTemplatedResponse
+- ""Ajuste tom da mensagem"" → WellhubCommunication.AdjustMessageTone
 
-PADRÕES DE EXTRAÇÃO:
-- Procure por IDs de usuário (user + números, ou apenas números)
-- Procure por IDs de parceiro (partner + números, estabelecimento, local)  
-- Procure por timestamps no formato ISO ou data/hora mencionados
-- Palavras-chave: check-in, transação, status, verificar, consultar, parceiro, usuário
+Entrada: {input}
 
-Entrada do usuário: {input}
-
-Responda APENAS em formato JSON válido:
+Responda APENAS JSON:
 
 Para verificar check-in:
 {{
@@ -150,6 +144,7 @@ Se não corresponder a nenhuma função:
                 catch (JsonException jex)
                 {
                     Console.WriteLine($"Erro ao analisar JSON da resposta do modelo: {jex.Message}");
+                    Console.WriteLine($"JSON que causou o erro: {jsonRaw}");
                     // Tenta limpar o JSON de caracteres problemáticos e tentar novamente
                     try
                     {
@@ -328,14 +323,37 @@ Se não corresponder a nenhuma função:
         // Remove comentários de bloco (/* ... */)
         json = System.Text.RegularExpressions.Regex.Replace(json, @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
         
-        // Remove quebras de linha e espaços extras
+        // Preservar quebras de linha dentro de strings, mas remover quebras desnecessárias
+        // Primeiro, proteger strings JSON válidas
+        var stringMatches = System.Text.RegularExpressions.Regex.Matches(json, @"""[^""\\]*(?:\\.[^""\\]*)*""");
+        var protectedStrings = new Dictionary<string, string>();
+        int counter = 0;
+        
+        foreach (System.Text.RegularExpressions.Match match in stringMatches)
+        {
+            var placeholder = $"__STRING_PLACEHOLDER_{counter}__";
+            protectedStrings[placeholder] = match.Value;
+            json = json.Replace(match.Value, placeholder);
+            counter++;
+        }
+        
+        // Agora limpar quebras de linha fora das strings
         json = System.Text.RegularExpressions.Regex.Replace(json, @"\r\n|\r|\n", " ");
         json = System.Text.RegularExpressions.Regex.Replace(json, @"\s+", " ");
+        
+        // Restaurar strings protegidas
+        foreach (var kvp in protectedStrings)
+        {
+            json = json.Replace(kvp.Key, kvp.Value);
+        }
         
         // Corrige problemas comuns de JSON
         json = json.Replace("\"null\"", "null");
         json = json.Replace("\"\"", "null");
         json = json.Replace(": null", ": null"); // Garante espaçamento correto
+        
+        // Fix caracteres especiais que podem quebrar JSON
+        json = System.Text.RegularExpressions.Regex.Replace(json, @"(?<!\\)\\(?![""\\\/bfnrt])", @"\\");
         
         // Remove propriedades com valores null (opcional - pode ser mantido se necessário)
         // json = System.Text.RegularExpressions.Regex.Replace(json, @",\s*""[^""]*""\s*:\s*null", "");
@@ -364,6 +382,45 @@ Se não corresponder a nenhuma função:
             return ("WellhubTransaction", "ListSimulatedRecords", args);
         }
 
+        // Palavras-chave para comunicação humanizada (prioridade alta)
+        var communicationKeywords = new[] { "gere", "gerar", "resposta", "cliente", "template", "reembolso", "ajuste", "ajustar", "tom", "mensagem", "humanizada", "empática", "problema", "cobrança" };
+        if (communicationKeywords.Any(keyword => inputLower.Contains(keyword)) && !inputLower.Contains("verificar") && !inputLower.Contains("verifique"))
+        {
+            // Verificar se é template específico
+            if (inputLower.Contains("template") || inputLower.Contains("reembolso") || inputLower.Contains("checkin") || inputLower.Contains("erro"))
+            {
+                // Extrair nome do cliente
+                var customerName = ExtractCustomerName(input);
+                if (string.IsNullOrEmpty(customerName)) customerName = "Cliente";
+                
+                // Determinar tipo de scenario
+                var scenarioType = "REEMBOLSO"; // Padrão
+                if (inputLower.Contains("checkin")) scenarioType = "CHECKIN_LIBERADO";
+                else if (inputLower.Contains("erro")) scenarioType = "ERRO_SISTEMA";
+                else if (inputLower.Contains("investigação") || inputLower.Contains("investigacao")) scenarioType = "INVESTIGACAO";
+                
+                args["scenarioType"] = scenarioType;
+                args["customerName"] = customerName;
+                args["situationDetails"] = ExtractSituationFromInput(input);
+                return ("WellhubCommunication", "GenerateTemplatedResponse", args);
+            }
+            
+            // Verificar se é ajuste de tom
+            if (inputLower.Contains("ajuste") || inputLower.Contains("ajustar") || inputLower.Contains("tom"))
+            {
+                args["originalMessage"] = "Mensagem a ser ajustada";
+                args["urgencyLevel"] = "MEDIA";
+                args["sensitivityLevel"] = "MEDIA";
+                return ("WellhubCommunication", "AdjustMessageTone", args);
+            }
+            
+            // Geração de resposta padrão
+            args["caseContext"] = ExtractCaseContextFromInput(input);
+            args["actionTaken"] = "Resolução de problema";
+            args["resultStatus"] = "EM_ANDAMENTO";
+            return ("WellhubCommunication", "GenerateResolutionMessage", args);
+        }
+
         // Palavras-chave para verificar check-in
         var verifyKeywords = new[] { "verificar", "verifique", "check-in", "checkin", "status", "transação", "transacao" };
         if (verifyKeywords.Any(keyword => inputLower.Contains(keyword)))
@@ -384,6 +441,57 @@ Se não corresponder a nenhuma função:
         }
 
         return (null, null, args);
+    }
+
+    private string ExtractCaseContextFromInput(string input)
+    {
+        // Extrai contexto da situação do cliente
+        var keywords = new[] { "problema", "cobrança", "check-in", "acesso", "erro", "falha", "cliente" };
+        var foundKeywords = keywords.Where(k => input.ToLowerInvariant().Contains(k)).ToList();
+        
+        if (foundKeywords.Any())
+        {
+            return $"Cliente relatou: {string.Join(", ", foundKeywords)}. Situação: {input}";
+        }
+        
+        return $"Situação reportada pelo cliente: {input}";
+    }
+
+    private string ExtractCustomerName(string input)
+    {
+        // Buscar padrões para nome de usuário/cliente
+        var patterns = new[]
+        {
+            @"para\s+([A-Za-z0-9_-]+)", // "para user123"
+            @"cliente\s+([A-Za-z0-9_-]+)", // "cliente joão"
+            @"usuário\s+([A-Za-z0-9_-]+)", // "usuário maria"
+            @"usuario\s+([A-Za-z0-9_-]+)", // "usuario carlos"
+            @"user\s+([A-Za-z0-9_-]+)", // "user teste"
+        };
+        
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && match.Groups.Count > 1)
+            {
+                return match.Groups[1].Value;
+            }
+        }
+        
+        return string.Empty;
+    }
+
+    private string ExtractSituationFromInput(string input)
+    {
+        // Extrai detalhes específicos da situação
+        if (input.ToLowerInvariant().Contains("cobrança"))
+            return "Cobrança indevida identificada na conta do cliente";
+        if (input.ToLowerInvariant().Contains("check-in"))
+            return "Dificuldades para realizar check-in no aplicativo";
+        if (input.ToLowerInvariant().Contains("acesso"))
+            return "Problemas de acesso à plataforma";
+        
+        return "Situação específica do cliente necessita atenção";
     }
 
     private class RouteInfo

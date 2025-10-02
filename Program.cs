@@ -32,33 +32,33 @@ catch (Exception ex)
 
 var kernel = kernelBuilder.Build();
 
-// Cria plugin WellHub Transaction
+// Cria plugins WellHub
 var wellhubTransaction = new WellhubTransactionPlugin();
+var wellhubCommunication = new WellhubCommunicationPlugin(kernel);
 
-// Registrando plugin no Kernel
+// Registrando plugins no Kernel
 kernel.ImportPluginFromObject(wellhubTransaction, "WellhubTransaction");
+kernel.ImportPluginFromObject(wellhubCommunication, "WellhubCommunication");
 
 // Router usando LLM
 var router = new AIIntentRouter(kernel);
 
-Console.WriteLine("=== 🏥 Assistente de Diagnóstico WellHub ===");
-Console.WriteLine("Sistema especializado em verificação de check-ins e transações");
+Console.WriteLine("=== 🏥 Assistente de Diagnóstico e Comunicação WellHub ===");
+Console.WriteLine("Sistema completo para verificação de check-ins e comunicação humanizada");
 Console.WriteLine();
-Console.WriteLine("� Verificações disponíveis:");
-Console.WriteLine();
-Console.WriteLine("📊 Verificar Status de Check-in:");
-Console.WriteLine("  • \"Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00\"");
-Console.WriteLine("  • \"Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00\"");
-Console.WriteLine("  • \"Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00\"");
-Console.WriteLine();
-Console.WriteLine("� Registros de Teste:");
-Console.WriteLine("  • \"Mostre os registros de teste disponíveis\"");
+Console.WriteLine("🔍 Verificações Disponíveis:");
+Console.WriteLine("  • \"Verifique o check-in do usuário user123 no parceiro partner456\"");
 Console.WriteLine("  • \"Liste os dados simulados\"");
 Console.WriteLine();
-Console.WriteLine("� Cenários de teste pré-configurados:");
-Console.WriteLine("  • user123 + partner456 + 2024-10-02T10:00:00 → SUCESSO");
-Console.WriteLine("  • user456 + partner789 + 2024-10-02T11:30:00 → FALHA_TRANSACAO");
-Console.WriteLine("  • user789 + partner123 + 2024-10-02T09:15:00 → NAO_LOCALIZADO");
+Console.WriteLine("💬 Comunicação Humanizada:");
+Console.WriteLine("  • \"Gere uma resposta para cliente com problema de cobrança indevida\"");
+Console.WriteLine("  • \"Use template de reembolso para João com situação: cobrança duplicada\"");
+Console.WriteLine("  • \"Ajuste o tom desta mensagem para urgência alta\"");
+Console.WriteLine();
+Console.WriteLine("🎯 Cenários Pré-configurados:");
+Console.WriteLine("  • user123 + partner456 → SUCESSO");
+Console.WriteLine("  • user456 + partner789 → FALHA_TRANSACAO");
+Console.WriteLine("  • user789 + partner123 → NAO_LOCALIZADO");
 Console.WriteLine();
 Console.WriteLine("Digite 'sair' ou 'exit' para encerrar");
 Console.WriteLine("----------------------------------------");
