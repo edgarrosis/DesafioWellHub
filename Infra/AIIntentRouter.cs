@@ -13,8 +13,7 @@ public class AIIntentRouter
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
         _pluginFunctions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            { "Tasks", new List<string> { "AddTask", "ListTasks", "CompleteTask", "RecommendNext" } },
-            { "Notes", new List<string> { "AddNote", "ListNotes", "SearchNotes", "SummarizeNote" } }
+            { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords" } }
         };
     }
 
@@ -28,34 +27,48 @@ public class AIIntentRouter
         try
         {
             var prompt = @$"
-Você é um assistente especializado em identificar intenções de usuários e rotear comandos para funções adequadas.
+Você é um assistente especializado em diagnóstico de check-ins da WellHub. Sua função é identificar intenções do usuário relacionadas à verificação de transações e status de check-in.
 
 Analise a entrada do usuário e determine qual função deve ser chamada de acordo com as seguintes opções disponíveis:
 
-Plugin Tasks:
-- AddTask: Adiciona uma tarefa (parâmetro: title)
-- ListTasks: Lista todas as tarefas (sem parâmetros)
-- CompleteTask: Marca uma tarefa como concluída (parâmetro: index - número inteiro)
-- RecommendNext: Sugere a próxima tarefa a ser feita (sem parâmetros)
+Plugin WellhubTransaction:
+- VerifyCheckinStatus: Verifica o status de check-in e transação de um usuário
+  Parâmetros obrigatórios:
+  • userId: ID único do usuário (string)
+  • partnerId: ID do parceiro/estabelecimento (string) 
+  • timestamp: Data e hora do check-in no formato yyyy-MM-ddTHH:mm:ss (string)
 
-Plugin Notes:
-- AddNote: Adiciona uma nota (parâmetro: content)
-- ListNotes: Lista todas as notas (sem parâmetros)
-- SearchNotes: Busca notas por um termo (parâmetro: term)
-- SummarizeNote: Gera um resumo de uma nota específica (parâmetro: index - número inteiro)
+- ListSimulatedRecords: Lista todos os registros simulados disponíveis para teste
+  Parâmetros: nenhum
+
+EXEMPLOS DE ENTRADA VÁLIDAS:
+- ""Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00""
+- ""Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00""
+- ""Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00""
+- ""Mostre os registros de teste disponíveis""
+- ""Liste os dados simulados""
+
+PADRÕES DE EXTRAÇÃO:
+- Procure por IDs de usuário (user + números, ou apenas números)
+- Procure por IDs de parceiro (partner + números, estabelecimento, local)  
+- Procure por timestamps no formato ISO ou data/hora mencionados
+- Palavras-chave: check-in, transação, status, verificar, consultar, parceiro, usuário
 
 Entrada do usuário: {input}
 
-Responda em formato JSON:
+Responda APENAS em formato JSON válido:
 {{
-  ""plugin"": ""[nome do plugin: Tasks ou Notes]"",
-  ""function"": ""[nome da função]"",
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""[VerifyCheckinStatus ou ListSimulatedRecords]"",
   ""parameters"": {{
-    // parâmetros necessários para a função (se houver)
+    ""userId"": ""[ID do usuário extraído]"",
+    ""partnerId"": ""[ID do parceiro extraído]"",
+    ""timestamp"": ""[timestamp no formato yyyy-MM-ddTHH:mm:ss]""
   }}
 }}
 
-Se a entrada não corresponder a nenhuma função, retorne plugin e function como null.
+Se a entrada não corresponder a verificações de check-in, retorne plugin e function como null.
+Se for para listar registros, omita os parâmetros.
 ";
 
             var result = await _kernel.InvokePromptAsync(prompt);
@@ -95,18 +108,27 @@ Se a entrada não corresponder a nenhuma função, retorne plugin e function com
                                 }
                             }
                             
-                            // Tratamentos específicos para parâmetros comuns
-                            if (routeInfo.Function.Equals("AddTask", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("title"))
+                            // Tratamentos específicos para parâmetros do WellhubTransaction
+                            if (routeInfo.Function.Equals("VerifyCheckinStatus", StringComparison.OrdinalIgnoreCase))
                             {
-                                // Extrair título da tarefa da entrada do usuário
-                                var title = ExtractContentAfterKeyword(input, "tarefa");
-                                args["title"] = string.IsNullOrWhiteSpace(title) ? "Sem título" : title;
-                            }
-                            else if (routeInfo.Function.Equals("AddNote", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("content"))
-                            {
-                                // Extrair conteúdo da nota da entrada do usuário
-                                var content = ExtractContentAfterKeyword(input, "nota");
-                                args["content"] = string.IsNullOrWhiteSpace(content) ? "Vazio" : content;
+                                // Garantir que todos os parâmetros obrigatórios estejam presentes
+                                if (!args.ContainsKey("userId"))
+                                {
+                                    var userId = ExtractUserId(input);
+                                    args["userId"] = string.IsNullOrWhiteSpace(userId) ? "user_not_found" : userId;
+                                }
+                                
+                                if (!args.ContainsKey("partnerId"))
+                                {
+                                    var partnerId = ExtractPartnerId(input);
+                                    args["partnerId"] = string.IsNullOrWhiteSpace(partnerId) ? "partner_not_found" : partnerId;
+                                }
+                                
+                                if (!args.ContainsKey("timestamp"))
+                                {
+                                    var timestamp = ExtractTimestamp(input);
+                                    args["timestamp"] = string.IsNullOrWhiteSpace(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
+                                }
                             }
                             
                             return (routeInfo.Plugin, routeInfo.Function, args);
@@ -167,6 +189,92 @@ Se a entrada não corresponder a nenhuma função, retorne plugin e function com
         if (keywordIndex < 0) return string.Empty;
         
         return input[(keywordIndex + keyword.Length)..].Trim();
+    }
+
+    private string ExtractUserId(string input)
+    {
+        // Procura por padrões como "user123", "usuário 123", "user_123", etc.
+        var patterns = new[]
+        {
+            @"user\s*(\w+)",
+            @"usuário\s*(\w+)",
+            @"usuario\s*(\w+)",
+            @"id\s*do\s*usuário\s*(\w+)",
+            @"user\d+",
+            @"\busr\w*\s*(\w+)"
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private string ExtractPartnerId(string input)
+    {
+        // Procura por padrões como "partner456", "parceiro 456", "estabelecimento 456", etc.
+        var patterns = new[]
+        {
+            @"partner\s*(\w+)",
+            @"parceiro\s*(\w+)",
+            @"estabelecimento\s*(\w+)",
+            @"local\s*(\w+)",
+            @"id\s*do\s*parceiro\s*(\w+)",
+            @"partner\d+",
+            @"\bptr\w*\s*(\w+)"
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private string ExtractTimestamp(string input)
+    {
+        // Procura por timestamps no formato ISO (yyyy-MM-ddTHH:mm:ss)
+        var isoPattern = @"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}";
+        var match = System.Text.RegularExpressions.Regex.Match(input, isoPattern);
+        
+        if (match.Success)
+        {
+            return match.Value;
+        }
+
+        // Procura por outros formatos de data/hora e tenta converter
+        var datePatterns = new[]
+        {
+            @"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}",
+            @"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}",
+            @"\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}"
+        };
+
+        foreach (var pattern in datePatterns)
+        {
+            match = System.Text.RegularExpressions.Regex.Match(input, pattern);
+            if (match.Success)
+            {
+                // Tenta converter para o formato ISO
+                if (DateTime.TryParse(match.Value, out var date))
+                {
+                    return date.ToString("yyyy-MM-ddTHH:mm:ss");
+                }
+            }
+        }
+
+        return string.Empty;
     }
 
     private class RouteInfo

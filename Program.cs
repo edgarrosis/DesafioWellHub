@@ -32,34 +32,33 @@ catch (Exception ex)
 
 var kernel = kernelBuilder.Build();
 
-// "Memória" persistida em JSON
-var store = new JsonMemoryStore("data");
+// Cria plugin WellHub Transaction
+var wellhubTransaction = new WellhubTransactionPlugin();
 
-// Cria plugins com acesso ao LLM
-var tasks = new TaskPlugin(store, kernel);
-var notes = new NotesPlugin(store, new AISummarizer(kernel));
-
-// Registrando plugins no Kernel
-kernel.ImportPluginFromObject(tasks, "Tasks");
-kernel.ImportPluginFromObject(notes, "Notes");
+// Registrando plugin no Kernel
+kernel.ImportPluginFromObject(wellhubTransaction, "WellhubTransaction");
 
 // Router usando LLM
 var router = new AIIntentRouter(kernel);
 
-Console.WriteLine("=== Assistente Pessoal com IA ===");
-Console.WriteLine("O que posso fazer por você:");
+Console.WriteLine("=== 🏥 Assistente de Diagnóstico WellHub ===");
+Console.WriteLine("Sistema especializado em verificação de check-ins e transações");
 Console.WriteLine();
-Console.WriteLine("📋 Gerenciar suas tarefas:");
-Console.WriteLine("  • Criar tarefas - ex: \"Preciso comprar café amanhã\"");
-Console.WriteLine("  • Mostrar suas tarefas - ex: \"Mostre minhas tarefas pendentes\"");
-Console.WriteLine("  • Concluir tarefas - ex: \"Marquei como concluída a tarefa 2\"");
-Console.WriteLine("  • Recomendar o que fazer - ex: \"O que devo fazer agora?\"");
+Console.WriteLine("� Verificações disponíveis:");
 Console.WriteLine();
-Console.WriteLine("📝 Organizar suas notas:");
-Console.WriteLine("  • Salvar anotações - ex: \"Anote que a reunião foi adiada para sexta\"");
-Console.WriteLine("  • Ver suas anotações - ex: \"Mostrar todas as minhas notas\"");
-Console.WriteLine("  • Buscar informações - ex: \"Encontre minhas notas sobre reunião\"");
-Console.WriteLine("  • Resumir conteúdo - ex: \"Faça um resumo da nota 2\"");
+Console.WriteLine("📊 Verificar Status de Check-in:");
+Console.WriteLine("  • \"Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00\"");
+Console.WriteLine("  • \"Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00\"");
+Console.WriteLine("  • \"Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00\"");
+Console.WriteLine();
+Console.WriteLine("� Registros de Teste:");
+Console.WriteLine("  • \"Mostre os registros de teste disponíveis\"");
+Console.WriteLine("  • \"Liste os dados simulados\"");
+Console.WriteLine();
+Console.WriteLine("� Cenários de teste pré-configurados:");
+Console.WriteLine("  • user123 + partner456 + 2024-10-02T10:00:00 → SUCESSO");
+Console.WriteLine("  • user456 + partner789 + 2024-10-02T11:30:00 → FALHA_TRANSACAO");
+Console.WriteLine("  • user789 + partner123 + 2024-10-02T09:15:00 → NAO_LOCALIZADO");
 Console.WriteLine();
 Console.WriteLine("Digite 'sair' ou 'exit' para encerrar");
 Console.WriteLine("----------------------------------------");
