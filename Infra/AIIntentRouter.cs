@@ -1,5 +1,6 @@
 using Microsoft.SemanticKernel;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SkOfflineCourse.Infra;
 
@@ -7,6 +8,37 @@ public class AIIntentRouter
 {
     private readonly Kernel _kernel;
     private readonly Dictionary<string, List<string>> _pluginFunctions;
+
+    // Regex patterns compilados para melhor performance
+    private static readonly Regex[] UserIdPatterns = new[]
+    {
+        new Regex(@"user\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"usuário\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"usuario\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"id\s*do\s*usuário\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"user\d+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"\busr\w*\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase)
+    };
+
+    private static readonly Regex[] PartnerIdPatterns = new[]
+    {
+        new Regex(@"partner\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"parceiro\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"estabelecimento\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"local\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"id\s*do\s*parceiro\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"partner\d+", RegexOptions.Compiled | RegexOptions.IgnoreCase)
+    };
+
+    private static readonly Regex[] DateTimePatterns = new[]
+    {
+        new Regex(@"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}", RegexOptions.Compiled),
+        new Regex(@"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}", RegexOptions.Compiled),
+        new Regex(@"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", RegexOptions.Compiled),
+        new Regex(@"\d{2}/\d{2}/\d{4}\s+às\s+\d{2}:\d{2}:\d{2}", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"às\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"horário\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", RegexOptions.Compiled | RegexOptions.IgnoreCase)
+    };
 
     public AIIntentRouter(Kernel kernel)
     {
@@ -151,20 +183,10 @@ public class AIIntentRouter
 
     private string ExtractUserId(string input)
     {
-        // Procura por padrões como "user123", "usuário 123", "user_123", etc.
-        var patterns = new[]
+        // Usa padrões regex compilados para melhor performance
+        foreach (var regex in UserIdPatterns)
         {
-            @"user\s*(\w+)",
-            @"usuário\s*(\w+)",
-            @"usuario\s*(\w+)",
-            @"id\s*do\s*usuário\s*(\w+)",
-            @"user\d+",
-            @"\busr\w*\s*(\w+)"
-        };
-
-        foreach (var pattern in patterns)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var match = regex.Match(input);
             if (match.Success)
             {
                 return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
@@ -176,21 +198,10 @@ public class AIIntentRouter
 
     private string ExtractPartnerId(string input)
     {
-        // Procura por padrões como "partner456", "parceiro 456", "estabelecimento 456", etc.
-        var patterns = new[]
+        // Usa padrões regex compilados para melhor performance
+        foreach (var regex in PartnerIdPatterns)
         {
-            @"partner\s*(\w+)",
-            @"parceiro\s*(\w+)",
-            @"estabelecimento\s*(\w+)",
-            @"local\s*(\w+)",
-            @"id\s*do\s*parceiro\s*(\w+)",
-            @"partner\d+",
-            @"\bptr\w*\s*(\w+)"
-        };
-
-        foreach (var pattern in patterns)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var match = regex.Match(input);
             if (match.Success)
             {
                 return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
@@ -202,29 +213,18 @@ public class AIIntentRouter
 
     private string ExtractTimestamp(string input)
     {
-        // Procura por timestamps no formato ISO (yyyy-MM-ddTHH:mm:ss)
-        var isoPattern = @"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}";
-        var match = System.Text.RegularExpressions.Regex.Match(input, isoPattern);
-        
-        if (match.Success)
+        // Usa padrões regex compilados para melhor performance
+        foreach (var regex in DateTimePatterns)
         {
-            return match.Value;
-        }
-
-        // Procura por outros formatos de data/hora e tenta converter
-        var datePatterns = new[]
-        {
-            @"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}",
-            @"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}",
-            @"\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}"
-        };
-
-        foreach (var pattern in datePatterns)
-        {
-            match = System.Text.RegularExpressions.Regex.Match(input, pattern);
+            var match = regex.Match(input);
             if (match.Success)
             {
-                // Tenta converter para o formato ISO
+                // Tenta converter para o formato ISO se necessário
+                if (match.Value.Contains('T'))
+                {
+                    return match.Value; // Já está no formato ISO
+                }
+                
                 if (DateTime.TryParse(match.Value, out var date))
                 {
                     return date.ToString("yyyy-MM-ddTHH:mm:ss");
