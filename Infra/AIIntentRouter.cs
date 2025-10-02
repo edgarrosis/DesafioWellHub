@@ -57,9 +57,11 @@ PADRÕES DE EXTRAÇÃO:
 Entrada do usuário: {input}
 
 Responda APENAS em formato JSON válido:
+
+Para verificar check-in:
 {{
   ""plugin"": ""WellhubTransaction"",
-  ""function"": ""[VerifyCheckinStatus ou ListSimulatedRecords]"",
+  ""function"": ""VerifyCheckinStatus"",
   ""parameters"": {{
     ""userId"": ""[ID do usuário extraído]"",
     ""partnerId"": ""[ID do parceiro extraído]"",
@@ -67,20 +69,30 @@ Responda APENAS em formato JSON válido:
   }}
 }}
 
-Se a entrada não corresponder a verificações de check-in, retorne plugin e function como null.
-Se for para listar registros, omita os parâmetros.
+Para listar registros:
+{{
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""ListSimulatedRecords""
+}}
+
+Se não corresponder a nenhuma função:
+{{
+  ""plugin"": null,
+  ""function"": null
+}}
 ";
 
             var result = await _kernel.InvokePromptAsync(prompt);
             var response = result.ToString().Trim();
 
-            // Extrair o JSON da resposta (pode estar envolvido em ```json ... ```)
-            var jsonStart = response.IndexOf('{');
-            var jsonEnd = response.LastIndexOf('}');
+            // Extrair apenas o primeiro objeto JSON válido da resposta
+            var firstJsonObject = ExtractFirstJsonObject(response);
             
-            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            if (!string.IsNullOrEmpty(firstJsonObject))
             {
-                var jsonRaw = response.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                
+                // Limpar JSON problemático antes do parsing
+                var jsonRaw = CleanJsonString(firstJsonObject);
                 
                 // Tenta fazer o parsing do JSON
                 var options = new JsonSerializerOptions { 
@@ -177,10 +189,10 @@ Se for para listar registros, omita os parâmetros.
         catch (Exception ex)
         {
             Console.WriteLine($"Erro ao rotear com modelo de IA: {ex.Message}");
-            // Sem fallback - se o modelo falhar, retorna null
         }
 
-        return (null, null, args);
+        // Fallback manual baseado em palavras-chave
+        return TryManualRoute(input, args);
     }
 
     private string ExtractContentAfterKeyword(string input, string keyword)
@@ -275,6 +287,103 @@ Se for para listar registros, omita os parâmetros.
         }
 
         return string.Empty;
+    }
+
+    private string ExtractFirstJsonObject(string response)
+    {
+        var jsonStart = response.IndexOf('{');
+        if (jsonStart < 0) return string.Empty;
+        
+        int braceCount = 0;
+        int endIndex = jsonStart;
+        
+        for (int i = jsonStart; i < response.Length; i++)
+        {
+            if (response[i] == '{')
+                braceCount++;
+            else if (response[i] == '}')
+            {
+                braceCount--;
+                if (braceCount == 0)
+                {
+                    endIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        if (endIndex > jsonStart)
+        {
+            return response.Substring(jsonStart, endIndex - jsonStart + 1);
+        }
+        
+        return string.Empty;
+    }
+
+    private string CleanJsonString(string json)
+    {
+        // Remove comentários de linha única (// ...)
+        json = System.Text.RegularExpressions.Regex.Replace(json, @"//.*?(?=\r|\n|$)", "");
+        
+        // Remove comentários de bloco (/* ... */)
+        json = System.Text.RegularExpressions.Regex.Replace(json, @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+        
+        // Remove quebras de linha e espaços extras
+        json = System.Text.RegularExpressions.Regex.Replace(json, @"\r\n|\r|\n", " ");
+        json = System.Text.RegularExpressions.Regex.Replace(json, @"\s+", " ");
+        
+        // Corrige problemas comuns de JSON
+        json = json.Replace("\"null\"", "null");
+        json = json.Replace("\"\"", "null");
+        json = json.Replace(": null", ": null"); // Garante espaçamento correto
+        
+        // Remove propriedades com valores null (opcional - pode ser mantido se necessário)
+        // json = System.Text.RegularExpressions.Regex.Replace(json, @",\s*""[^""]*""\s*:\s*null", "");
+        // json = System.Text.RegularExpressions.Regex.Replace(json, @"""[^""]*""\s*:\s*null,", "");
+        
+        // Remove vírgulas duplas
+        json = System.Text.RegularExpressions.Regex.Replace(json, @",\s*,", ",");
+        
+        // Remove vírgula antes de }
+        json = System.Text.RegularExpressions.Regex.Replace(json, @",\s*}", "}");
+        
+        // Remove vírgula após {
+        json = System.Text.RegularExpressions.Regex.Replace(json, @"{\s*,", "{");
+        
+        return json.Trim();
+    }
+
+    private (string? plugin, string? function, KernelArguments args) TryManualRoute(string input, KernelArguments args)
+    {
+        var inputLower = input.ToLowerInvariant();
+
+        // Palavras-chave para listar registros
+        var listKeywords = new[] { "listar", "mostrar", "lista", "dados", "registros", "simulados", "disponíveis" };
+        if (listKeywords.Any(keyword => inputLower.Contains(keyword)))
+        {
+            return ("WellhubTransaction", "ListSimulatedRecords", args);
+        }
+
+        // Palavras-chave para verificar check-in
+        var verifyKeywords = new[] { "verificar", "verifique", "check-in", "checkin", "status", "transação", "transacao" };
+        if (verifyKeywords.Any(keyword => inputLower.Contains(keyword)))
+        {
+            // Extrair parâmetros manualmente
+            var userId = ExtractUserId(input);
+            var partnerId = ExtractPartnerId(input);
+            var timestamp = ExtractTimestamp(input);
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                args["userId"] = userId;
+                args["partnerId"] = string.IsNullOrEmpty(partnerId) ? "partner_default" : partnerId;
+                args["timestamp"] = string.IsNullOrEmpty(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
+                
+                return ("WellhubTransaction", "VerifyCheckinStatus", args);
+            }
+        }
+
+        return (null, null, args);
     }
 
     private class RouteInfo

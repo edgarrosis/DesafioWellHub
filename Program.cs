@@ -15,7 +15,7 @@ try
     // Configuração para o modelo de linguagem local via HTTP
     // Ajuste o endpoint e as configurações para corresponder à sua instalação local
     kernelBuilder.AddOpenAIChatCompletion(
-        modelId: "llama3.1:8b",
+        modelId: "llama3.2:3b",
         apiKey: "apiKey",
         httpClient: new HttpClient { 
             BaseAddress = new Uri("http://localhost:11434/v1/") // Ajuste conforme sua configuração local
@@ -81,8 +81,11 @@ while (true)
 
         if (plugin is null || functionName is null)
         {
-            Console.WriteLine("❓ Desculpe, não entendi o que você precisa. Tente dizer de outra forma ou consulte as sugestões acima.");
-            Console.WriteLine("   Por exemplo: \"Preciso comprar café\" ou \"Mostre minhas tarefas\".");
+            Console.WriteLine("❓ Não foi possível identificar a operação solicitada. Tente reformular sua solicitação.");
+            Console.WriteLine("   💡 Exemplos válidos:");
+            Console.WriteLine("   • \"Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00\"");
+            Console.WriteLine("   • \"Mostre os registros de teste disponíveis\"");
+            Console.WriteLine("   • \"Liste os dados simulados\"");
             continue;
         }
 
