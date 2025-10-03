@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SkOfflineCourse.Infra;
 
@@ -80,24 +81,43 @@ public class DataManager
 // Classes de modelo para os dados JSON
 public class CheckinData
 {
+    [JsonPropertyName("checkin_records")]
     public CheckinRecord[] CheckinRecords { get; set; } = Array.Empty<CheckinRecord>();
 }
 
 public class CheckinRecord
 {
     public string Id { get; set; } = string.Empty;
+    
+    [JsonPropertyName("userId")]
     public string UserId { get; set; } = string.Empty;
+    
+    [JsonPropertyName("partnerId")]
     public string PartnerId { get; set; } = string.Empty;
+    
     public string Timestamp { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    
+    [JsonPropertyName("partner_name")]
     public string PartnerName { get; set; } = string.Empty;
+    
+    [JsonPropertyName("user_name")]
     public string UserName { get; set; } = string.Empty;
+    
     public Location Location { get; set; } = new();
+    
+    [JsonPropertyName("error_code")]
     public string? ErrorCode { get; set; }
+    
+    [JsonPropertyName("error_reason")]
     public string? ErrorReason { get; set; }
+    
+    [JsonPropertyName("discount_applied")]
     public bool? DiscountApplied { get; set; }
+    
+    [JsonPropertyName("original_amount")]
     public decimal? OriginalAmount { get; set; }
 }
 
@@ -115,9 +135,14 @@ public class Partner
     public string Address { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    
+    [JsonPropertyName("operating_hours")]
     public OperatingHours OperatingHours { get; set; } = new();
+    
     public string[] Services { get; set; } = Array.Empty<string>();
     public bool Active { get; set; }
+    
+    [JsonPropertyName("closure_reason")]
     public string? ClosureReason { get; set; }
 }
 
@@ -133,13 +158,27 @@ public class User
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string Plan { get; set; } = string.Empty;
+    
+    [JsonPropertyName("registration_date")]
     public string RegistrationDate { get; set; } = string.Empty;
+    
     public string Status { get; set; } = string.Empty;
+    
+    [JsonPropertyName("credit_balance")]
     public decimal CreditBalance { get; set; }
+    
+    [JsonPropertyName("monthly_limit")]
     public decimal MonthlyLimit { get; set; }
+    
+    [JsonPropertyName("preferred_activities")]
     public string[] PreferredActivities { get; set; } = Array.Empty<string>();
+    
     public Location Location { get; set; } = new();
+    
+    [JsonPropertyName("payment_issue")]
     public PaymentIssue? PaymentIssue { get; set; }
+    
+    [JsonPropertyName("suspension_reason")]
     public string? SuspensionReason { get; set; }
 }
 
@@ -152,13 +191,18 @@ public class Location
 
 public class OperatingHours
 {
+    [JsonPropertyName("monday_friday")]
     public string MondayFriday { get; set; } = string.Empty;
+    
     public string Saturday { get; set; } = string.Empty;
     public string Sunday { get; set; } = string.Empty;
 }
 
 public class PaymentIssue
 {
+    [JsonPropertyName("card_expired")]
     public bool CardExpired { get; set; }
+    
+    [JsonPropertyName("expiry_date")]
     public string ExpiryDate { get; set; } = string.Empty;
 }

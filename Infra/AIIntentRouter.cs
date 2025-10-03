@@ -13,7 +13,7 @@ public class AIIntentRouter
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
         _pluginFunctions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords" } },
+            { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords", "GetUserInfo", "GetPartnerInfo" } },
             { "WellhubCommunication", new List<string> { "GenerateResolutionMessage", "GenerateTemplatedResponse", "AdjustMessageTone" } }
         };
     }
@@ -35,6 +35,8 @@ Analise a entrada do usuário e determine qual função chamar:
 Plugin WellhubTransaction:
 - VerifyCheckinStatus: Verifica status de check-in (parâmetros: userId, partnerId, timestamp)
 - ListSimulatedRecords: Lista registros de teste (sem parâmetros)
+- GetUserInfo: Consulta informações de usuário (parâmetros: userId)
+- GetPartnerInfo: Consulta informações de parceiro (parâmetros: partnerId)
 
 Plugin WellhubCommunication:
 - GenerateResolutionMessage: Gera resposta humanizada (parâmetros: caseContext, actionTaken, resultStatus)
@@ -43,10 +45,10 @@ Plugin WellhubCommunication:
 
 EXEMPLOS:
 - ""Verifique user123 partner456"" → WellhubTransaction.VerifyCheckinStatus
-- ""Liste os dados"" → WellhubTransaction.ListSimulatedRecords
+- ""Liste os dados"" ou ""Liste users"" → WellhubTransaction.ListSimulatedRecords
+- ""Consulte usuário user123"" → WellhubTransaction.GetUserInfo
+- ""Informações do parceiro partner456"" → WellhubTransaction.GetPartnerInfo
 - ""Gere resposta para cliente com cobrança"" → WellhubCommunication.GenerateResolutionMessage
-- ""Use template reembolso para João"" → WellhubCommunication.GenerateTemplatedResponse
-- ""Ajuste tom da mensagem"" → WellhubCommunication.AdjustMessageTone
 
 Entrada: {input}
 
@@ -67,6 +69,24 @@ Para listar registros:
 {{
   ""plugin"": ""WellhubTransaction"",
   ""function"": ""ListSimulatedRecords""
+}}
+
+Para consultar usuário:
+{{
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""GetUserInfo"",
+  ""parameters"": {{
+    ""userId"": ""[ID do usuário extraído]""
+  }}
+}}
+
+Para consultar parceiro:
+{{
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""GetPartnerInfo"",
+  ""parameters"": {{
+    ""partnerId"": ""[ID do parceiro extraído]""
+  }}
 }}
 
 Se não corresponder a nenhuma função:
