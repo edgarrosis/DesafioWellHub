@@ -1,5 +1,6 @@
 using Microsoft.SemanticKernel;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SkOfflineCourse.Infra;
 
@@ -7,6 +8,37 @@ public class AIIntentRouter
 {
     private readonly Kernel _kernel;
     private readonly Dictionary<string, List<string>> _pluginFunctions;
+
+    // Regex patterns compilados para melhor performance
+    private static readonly Regex[] UserIdPatterns = new[]
+    {
+        new Regex(@"(user\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura user123 completo
+        new Regex(@"(user\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura userABC completo
+        new Regex(@"usuário\s*(user\w+|user\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"usuario\s*(user\w+|user\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"id\s*do\s*usuário\s*(user\w+|user\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"\busr\w*\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase)
+    };
+
+    private static readonly Regex[] PartnerIdPatterns = new[]
+    {
+        new Regex(@"(partner\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura partner456 completo
+        new Regex(@"(partner\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura partnerABC completo
+        new Regex(@"parceiro\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"estabelecimento\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"local\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"id\s*do\s*parceiro\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase)
+    };
+
+    private static readonly Regex[] DateTimePatterns = new[]
+    {
+        new Regex(@"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}", RegexOptions.Compiled),
+        new Regex(@"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}", RegexOptions.Compiled),
+        new Regex(@"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", RegexOptions.Compiled),
+        new Regex(@"\d{2}/\d{2}/\d{4}\s+às\s+\d{2}:\d{2}:\d{2}", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"às\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"horário\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", RegexOptions.Compiled | RegexOptions.IgnoreCase)
+    };
 
     public AIIntentRouter(Kernel kernel)
     {
@@ -137,23 +169,55 @@ Se não corresponder a nenhuma função:
                             // Tratamentos específicos para parâmetros do WellhubTransaction
                             if (routeInfo.Function.Equals("VerifyCheckinStatus", StringComparison.OrdinalIgnoreCase))
                             {
-                                // Garantir que todos os parâmetros obrigatórios estejam presentes
-                                if (!args.ContainsKey("userId"))
+                                // Verificar e corrigir userId
+                                if (!args.ContainsKey("userId") || 
+                                    string.IsNullOrWhiteSpace(args["userId"]?.ToString()) ||
+                                    args["userId"]?.ToString().Contains("[ID do usuário extraído]") == true)
                                 {
                                     var userId = ExtractUserId(input);
                                     args["userId"] = string.IsNullOrWhiteSpace(userId) ? "user_not_found" : userId;
                                 }
                                 
-                                if (!args.ContainsKey("partnerId"))
+                                // Verificar e corrigir partnerId
+                                if (!args.ContainsKey("partnerId") || 
+                                    string.IsNullOrWhiteSpace(args["partnerId"]?.ToString()) ||
+                                    args["partnerId"]?.ToString().Contains("[ID do parceiro extraído]") == true)
                                 {
                                     var partnerId = ExtractPartnerId(input);
                                     args["partnerId"] = string.IsNullOrWhiteSpace(partnerId) ? "partner_not_found" : partnerId;
                                 }
                                 
-                                if (!args.ContainsKey("timestamp"))
+                                // Verificar e corrigir timestamp
+                                if (!args.ContainsKey("timestamp") || 
+                                    string.IsNullOrWhiteSpace(args["timestamp"]?.ToString()) ||
+                                    args["timestamp"]?.ToString().Contains("[timestamp no formato") == true)
                                 {
                                     var timestamp = ExtractTimestamp(input);
                                     args["timestamp"] = string.IsNullOrWhiteSpace(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
+                                }
+                            }
+                            
+                            // Tratamento específico para GetUserInfo
+                            else if (routeInfo.Function.Equals("GetUserInfo", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!args.ContainsKey("userId") || 
+                                    string.IsNullOrWhiteSpace(args["userId"]?.ToString()) ||
+                                    args["userId"]?.ToString().Contains("[ID do usuário extraído]") == true)
+                                {
+                                    var userId = ExtractUserId(input);
+                                    args["userId"] = string.IsNullOrWhiteSpace(userId) ? "user_not_found" : userId;
+                                }
+                            }
+                            
+                            // Tratamento específico para GetPartnerInfo
+                            else if (routeInfo.Function.Equals("GetPartnerInfo", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!args.ContainsKey("partnerId") || 
+                                    string.IsNullOrWhiteSpace(args["partnerId"]?.ToString()) ||
+                                    args["partnerId"]?.ToString().Contains("[ID do parceiro extraído]") == true)
+                                {
+                                    var partnerId = ExtractPartnerId(input);
+                                    args["partnerId"] = string.IsNullOrWhiteSpace(partnerId) ? "partner_not_found" : partnerId;
                                 }
                             }
                             
@@ -220,23 +284,14 @@ Se não corresponder a nenhuma função:
 
     private string ExtractUserId(string input)
     {
-        // Procura por padrões como "user123", "usuário 123", "user_123", etc.
-        var patterns = new[]
+        // Usa padrões regex compilados para melhor performance
+        foreach (var regex in UserIdPatterns)
         {
-            @"user\s*(\w+)",
-            @"usuário\s*(\w+)",
-            @"usuario\s*(\w+)",
-            @"id\s*do\s*usuário\s*(\w+)",
-            @"user\d+",
-            @"\busr\w*\s*(\w+)"
-        };
-
-        foreach (var pattern in patterns)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var match = regex.Match(input);
             if (match.Success)
             {
-                return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+                var result = match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+                return result;
             }
         }
 
@@ -245,24 +300,14 @@ Se não corresponder a nenhuma função:
 
     private string ExtractPartnerId(string input)
     {
-        // Procura por padrões como "partner456", "parceiro 456", "estabelecimento 456", etc.
-        var patterns = new[]
+        // Usa padrões regex compilados para melhor performance
+        foreach (var regex in PartnerIdPatterns)
         {
-            @"partner\s*(\w+)",
-            @"parceiro\s*(\w+)",
-            @"estabelecimento\s*(\w+)",
-            @"local\s*(\w+)",
-            @"id\s*do\s*parceiro\s*(\w+)",
-            @"partner\d+",
-            @"\bptr\w*\s*(\w+)"
-        };
-
-        foreach (var pattern in patterns)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var match = regex.Match(input);
             if (match.Success)
             {
-                return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+                var result = match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+                return result;
             }
         }
 
@@ -271,29 +316,18 @@ Se não corresponder a nenhuma função:
 
     private string ExtractTimestamp(string input)
     {
-        // Procura por timestamps no formato ISO (yyyy-MM-ddTHH:mm:ss)
-        var isoPattern = @"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}";
-        var match = System.Text.RegularExpressions.Regex.Match(input, isoPattern);
-        
-        if (match.Success)
+        // Usa padrões regex compilados para melhor performance
+        foreach (var regex in DateTimePatterns)
         {
-            return match.Value;
-        }
-
-        // Procura por outros formatos de data/hora e tenta converter
-        var datePatterns = new[]
-        {
-            @"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}",
-            @"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}",
-            @"\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}"
-        };
-
-        foreach (var pattern in datePatterns)
-        {
-            match = System.Text.RegularExpressions.Regex.Match(input, pattern);
+            var match = regex.Match(input);
             if (match.Success)
             {
-                // Tenta converter para o formato ISO
+                // Tenta converter para o formato ISO se necessário
+                if (match.Value.Contains('T'))
+                {
+                    return match.Value; // Já está no formato ISO
+                }
+                
                 if (DateTime.TryParse(match.Value, out var date))
                 {
                     return date.ToString("yyyy-MM-ddTHH:mm:ss");
@@ -439,6 +473,30 @@ Se não corresponder a nenhuma função:
             args["actionTaken"] = "Resolução de problema";
             args["resultStatus"] = "EM_ANDAMENTO";
             return ("WellhubCommunication", "GenerateResolutionMessage", args);
+        }
+
+        // Palavras-chave para consultar usuário
+        var userKeywords = new[] { "usuário", "usuario", "user", "informações", "informacoes", "dados", "consulte", "mostre" };
+        if (userKeywords.Any(keyword => inputLower.Contains(keyword)) && (inputLower.Contains("user") || inputLower.Contains("usuário") || inputLower.Contains("usuario")))
+        {
+            var userId = ExtractUserId(input);
+            if (!string.IsNullOrEmpty(userId))
+            {
+                args["userId"] = userId;
+                return ("WellhubTransaction", "GetUserInfo", args);
+            }
+        }
+
+        // Palavras-chave para consultar parceiro
+        var partnerKeywords = new[] { "parceiro", "partner", "estabelecimento", "informações", "informacoes", "dados", "consulte", "mostre" };
+        if (partnerKeywords.Any(keyword => inputLower.Contains(keyword)) && (inputLower.Contains("partner") || inputLower.Contains("parceiro") || inputLower.Contains("estabelecimento")))
+        {
+            var partnerId = ExtractPartnerId(input);
+            if (!string.IsNullOrEmpty(partnerId))
+            {
+                args["partnerId"] = partnerId;
+                return ("WellhubTransaction", "GetPartnerInfo", args);
+            }
         }
 
         // Palavras-chave para verificar check-in

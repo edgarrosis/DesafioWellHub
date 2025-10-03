@@ -12,7 +12,7 @@ public class WellhubTransactionPlugin
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
     public WellhubTransactionPlugin()
@@ -35,14 +35,21 @@ public class WellhubTransactionPlugin
     {
         try
         {
-            // Valida parâmetros de entrada
-            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(partnerId) || string.IsNullOrWhiteSpace(timestamp))
+            // Valida se pelo menos userId foi fornecido
+            if (string.IsNullOrWhiteSpace(userId))
             {
-                var validationError = new CheckinResult("ERRO_VALIDACAO", "Parâmetros obrigatórios não fornecidos");
+                var validationError = new CheckinResult("ERRO_VALIDACAO", "ID do usuário é obrigatório");
                 return JsonSerializer.Serialize(validationError, JsonOptions);
             }
 
-            // Busca registro nos dados JSON
+            // Se não temos todos os parâmetros, faz busca flexível por usuário
+            if (string.IsNullOrWhiteSpace(partnerId) || partnerId == "partner_not_found" || 
+                string.IsNullOrWhiteSpace(timestamp) || timestamp.StartsWith("2025-"))
+            {
+                return await SearchUserRecords(userId);
+            }
+
+            // Busca registro específico nos dados JSON
             var checkinRecord = await _dataManager.FindCheckinRecordAsync(userId, partnerId, timestamp);
             
             if (checkinRecord != null)
@@ -220,6 +227,86 @@ public class WellhubTransactionPlugin
         catch (Exception ex)
         {
             var errorResult = new { Error = $"Erro ao consultar parceiro: {ex.Message}" };
+            return JsonSerializer.Serialize(errorResult, JsonOptions);
+        }
+    }
+
+    /// <summary>
+    /// Busca todos os registros de check-in de um usuário específico
+    /// </summary>
+    private async Task<string> SearchUserRecords(string userId)
+    {
+        try
+        {
+            var allRecords = await _dataManager.GetCheckinRecordsAsync();
+            var userRecords = allRecords.Where(r => r.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+            if (!userRecords.Any())
+            {
+                var notFound = new CheckinResult("NAO_LOCALIZADO", $"Nenhum registro de check-in encontrado para o usuário {userId}");
+                return JsonSerializer.Serialize(notFound, JsonOptions);
+            }
+
+            // Se encontrou apenas um registro, retorna detalhado
+            if (userRecords.Length == 1)
+            {
+                var record = userRecords[0];
+                var user = await _dataManager.FindUserAsync(userId);
+                var partner = await _dataManager.FindPartnerAsync(record.PartnerId);
+
+                var detailedResult = new
+                {
+                    Status = record.Status,
+                    Details = record.Details,
+                    TransactionId = record.Id,
+                    Amount = record.Amount,
+                    User = new
+                    {
+                        Id = record.UserId,
+                        Name = record.UserName,
+                        Plan = user?.Plan ?? "UNKNOWN"
+                    },
+                    Partner = new
+                    {
+                        Id = record.PartnerId,
+                        Name = record.PartnerName,
+                        Type = partner?.Type ?? "UNKNOWN",
+                        City = record.Location.City,
+                        Address = record.Location.Address
+                    },
+                    Timestamp = record.Timestamp,
+                    ErrorCode = record.ErrorCode,
+                    ErrorReason = record.ErrorReason
+                };
+
+                return JsonSerializer.Serialize(detailedResult, JsonOptions);
+            }
+
+            // Se encontrou múltiplos registros, retorna lista resumida
+            var summaryResults = userRecords.Select(record => new
+            {
+                TransactionId = record.Id,
+                Status = record.Status,
+                PartnerName = record.PartnerName,
+                Timestamp = record.Timestamp,
+                Amount = record.Amount,
+                Details = record.Details
+            }).ToArray();
+
+            var multipleResult = new
+            {
+                Message = $"Encontrados {userRecords.Length} registros para o usuário {userId}",
+                UserId = userId,
+                UserName = userRecords[0].UserName,
+                Records = summaryResults,
+                Suggestion = "Use um comando mais específico com parceiro e timestamp para ver detalhes completos"
+            };
+
+            return JsonSerializer.Serialize(multipleResult, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            var errorResult = new CheckinResult("FALHA_TRANSACAO", $"Erro na busca por registros do usuário: {ex.Message}");
             return JsonSerializer.Serialize(errorResult, JsonOptions);
         }
     }
