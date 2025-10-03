@@ -86,80 +86,81 @@ Transforme essas informações em uma mensagem de suporte empática e humanizada
     }
 
     /// <summary>
-    /// Gera uma mensagem de suporte usando templates específicos para diferentes cenários
+    /// Gera uma mensagem humanizada usando IA para diferentes cenários da WellHub
     /// </summary>
-    [KernelFunction, Description("Gera mensagens usando templates otimizados para cenários específicos da WellHub")]
+    [KernelFunction, Description("Gera mensagens humanizadas usando IA para cenários específicos da WellHub")]
     public async Task<string> GenerateTemplatedResponse(
-        [Description("Tipo de cenário: REEMBOLSO, CHECKIN_LIBERADO, ERRO_SISTEMA, INVESTIGACAO")] string scenarioType,
+        [Description("Tipo de cenário: account_summary, checkin_history, failure_analysis, no_checkins_found, partner_info")] string scenarioType,
         [Description("Nome do cliente")] string customerName,
-        [Description("Detalhes específicos da situação")] string situationDetails)
+        [Description("Detalhes específicos da situação com dados reais do usuário")] string situationDetails)
     {
-        var templates = new Dictionary<string, string>
+        if (string.IsNullOrWhiteSpace(customerName) || string.IsNullOrWhiteSpace(situationDetails))
         {
-            ["REEMBOLSO"] = $@"Olá {customerName},
-
-Entendemos sua preocupação com a cobrança inesperada e queremos resolver isso rapidamente para você.
-
-✅ Boa notícia: Já processamos seu reembolso!
-📝 O que aconteceu: {situationDetails}
-💰 O valor será devolvido no seu cartão em até 5 dias úteis
-
-Implementamos medidas para evitar que isso aconteça novamente. Se precisar de qualquer esclarecimento, estamos aqui para ajudar.
-
-Com carinho,
-Equipe WellHub",
-
-            ["CHECKIN_LIBERADO"] = $@"Oi {customerName}!
-
-Identificamos o que estava impedindo seus check-ins e já corrigimos tudo.
-
-✅ Problema resolvido: {situationDetails}
-🏃‍♀️ Seus check-ins já estão liberados no app
-⭐ Pode aproveitar todas as atividades disponíveis
-
-Testamos aqui e está funcionando perfeitamente. Bom treino!
-
-Abraços,
-Time WellHub",
-
-            ["ERRO_SISTEMA"] = $@"Prezado(a) {customerName},
-
-Pedimos sinceras desculpas pelo transtorno causado.
-
-❌ O que houve: {situationDetails}
-🔧 Nossa equipe técnica já solucionou o problema
-✅ Tudo voltou ao normal
-
-Tomamos medidas para evitar que isso se repita. Sua experiência é nossa prioridade.
-
-Atenciosamente,
-Suporte WellHub",
-
-            ["INVESTIGACAO"] = $@"Olá {customerName},
-
-Recebemos seu contato e estamos tratando sua situação com máxima prioridade.
-
-🔍 Onde estamos: {situationDetails}
-⏰ Nossa equipe especializada está investigando
-📞 Você será atualizado assim que tivermos novidades
-
-Agradecemos sua paciência enquanto trabalhamos na melhor solução para você.
-
-Com atenção,
-Equipe de Relacionamento WellHub"
-        };
-
-        if (templates.TryGetValue(scenarioType.ToUpperInvariant(), out var template))
-        {
-            return template.Trim();
+            return "Para gerar uma resposta adequada, preciso do nome do cliente e detalhes da situação.";
         }
 
-        // Fallback usando IA para cenários personalizados
-        return await GenerateResolutionMessage(
-            $"Cliente {customerName} com situação: {situationDetails}",
-            $"Análise personalizada do cenário {scenarioType}",
-            "EM_ANDAMENTO"
-        );
+        var prompt = $@"
+Você é um especialista em atendimento ao cliente da WellHub. Gere uma resposta humanizada e empática baseada nos dados reais do usuário.
+
+CENÁRIO: {scenarioType}
+CLIENTE: {customerName}
+DADOS REAIS DO SISTEMA:
+{situationDetails}
+
+DIRETRIZES ESPECÍFICAS POR CENÁRIO:
+
+Se ACCOUNT_SUMMARY (resumo da conta):
+- Cumprimente o cliente pelo nome
+- Destaque informações específicas do plano, status e saldo
+- Mencione estatísticas de check-ins se houver
+- Ofereça dicas personalizadas baseadas no status da conta
+- Tom motivacional e positivo
+
+Se CHECKIN_HISTORY (histórico de check-ins):
+- Parabenize a dedicação se houver check-ins
+- Liste estabelecimentos específicos visitados
+- Mencione valores gastos e datas reais
+- Se não houver check-ins, seja acolhedor e ofereça sugestões
+- Tom encorajador
+
+Se FAILURE_ANALYSIS (análise de falhas):
+- Reconheça os problemas de forma empática
+- Liste locais e motivos específicos das falhas
+- Ofereça soluções práticas baseadas nos erros reais
+- Se não houver falhas, parabenize a performance
+- Tom solucionador
+
+Se NO_CHECKINS_FOUND (sem check-ins):
+- Seja acolhedor para novos usuários
+- Personalize baseado no plano do usuário
+- Ofereça orientações específicas
+- Tom entusiasmado e motivacional
+
+Se PARTNER_INFO (informações do parceiro):
+- Forneça detalhes específicos do estabelecimento
+- Mencione tipo, localização e status reais
+- Oriente sobre como usar o serviço
+- Tom informativo e prestativo
+
+FORMATO DE RESPOSTA:
+- Use emojis apropriados
+- Inclua dados específicos fornecidos
+- Mantenha tom profissional mas caloroso
+- Termine com assinatura da equipe WellHub
+- Máximo 200 palavras
+
+Gere a resposta agora:";
+
+        try
+        {
+            var result = await _kernel.InvokePromptAsync(prompt);
+            return result.ToString().Trim();
+        }
+        catch (Exception ex)
+        {
+            // Fallback para uma resposta básica se o LLM falhar
+            return $"Olá {customerName}! Recebemos sua consulta sobre {scenarioType} e nossa equipe está analisando os seguintes dados: {situationDetails}. Em breve retornaremos com uma resposta completa. Equipe WellHub 🏃‍♂️";
+        }
     }
 
     /// <summary>
