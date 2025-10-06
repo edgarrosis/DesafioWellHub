@@ -39,12 +39,10 @@ var wellhubTransaction = new WellhubTransactionPlugin();
 
 // CRIADO: plugin de Correção
 var wellhubCorrection = new WellhubCorrectionPlugin();
+kernel.ImportPluginFromObject(wellhubCorrection, "WellhubCorrection");
 
 // Registrando plugin no Kernel
 kernel.ImportPluginFromObject(wellhubTransaction, "WellhubTransaction");
-
-// CRIADO: registro do plugin de correção
-kernel.ImportPluginFromObject(wellhubCorrection, "WellhubCorrection");
 
 // Router usando LLM
 var router = new AIIntentRouter(kernel);
@@ -108,3 +106,4 @@ while (true)
         Console.WriteLine($"⚠️ Erro: {ex.Message}");
     }
 }
+    
