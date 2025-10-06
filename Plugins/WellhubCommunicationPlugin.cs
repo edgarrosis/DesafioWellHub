@@ -78,7 +78,7 @@ Transforme essas informações em uma mensagem de suporte empática e humanizada
             
             return response;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return "Não conseguimos processar sua solicitação no momento. Nossa equipe está trabalhando para resolver esta situação. " +
                    "Por favor, entre em contato conosco pelo suporte@wellhub.com. Pedimos desculpas pelo inconveniente e agradecemos sua paciência.";
@@ -156,7 +156,7 @@ Gere a resposta agora:";
             var result = await _kernel.InvokePromptAsync(prompt);
             return result.ToString().Trim();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Fallback para uma resposta básica se o LLM falhar
             return $"Olá {customerName}! Recebemos sua consulta sobre {scenarioType} e nossa equipe está analisando os seguintes dados: {situationDetails}. Em breve retornaremos com uma resposta completa. Equipe WellHub 🏃‍♂️";
@@ -199,7 +199,7 @@ Reescreva com o tom adequado, mantendo todas as informações importantes:";
             var result = await _kernel.InvokePromptAsync(tonePrompt);
             return result.ToString().Trim();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return originalMessage; // Retorna mensagem original se houver falha
         }

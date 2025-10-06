@@ -105,7 +105,7 @@ public class AIIntentRouter
                                 // Verificar e corrigir userId
                                 if (!args.ContainsKey("userId") || 
                                     string.IsNullOrWhiteSpace(args["userId"]?.ToString()) ||
-                                    args["userId"]?.ToString().Contains("[ID do usuário extraído]") == true)
+                                    args["userId"]?.ToString()?.Contains("[ID do usuário extraído]") == true)
                                 {
                                     var userId = ExtractUserId(input);
                                     args["userId"] = string.IsNullOrWhiteSpace(userId) ? "user_not_found" : userId;
@@ -114,7 +114,7 @@ public class AIIntentRouter
                                 // Verificar e corrigir partnerId
                                 if (!args.ContainsKey("partnerId") || 
                                     string.IsNullOrWhiteSpace(args["partnerId"]?.ToString()) ||
-                                    args["partnerId"]?.ToString().Contains("[ID do parceiro extraído]") == true)
+                                    args["partnerId"]?.ToString()?.Contains("[ID do parceiro extraído]") == true)
                                 {
                                     var partnerId = ExtractPartnerId(input);
                                     args["partnerId"] = string.IsNullOrWhiteSpace(partnerId) ? "partner_not_found" : partnerId;
@@ -123,7 +123,7 @@ public class AIIntentRouter
                                 // Verificar e corrigir timestamp
                                 if (!args.ContainsKey("timestamp") || 
                                     string.IsNullOrWhiteSpace(args["timestamp"]?.ToString()) ||
-                                    args["timestamp"]?.ToString().Contains("[timestamp no formato") == true)
+                                    args["timestamp"]?.ToString()?.Contains("[timestamp no formato") == true)
                                 {
                                     var timestamp = ExtractTimestamp(input);
                                     args["timestamp"] = string.IsNullOrWhiteSpace(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
@@ -135,7 +135,7 @@ public class AIIntentRouter
                             {
                                 if (!args.ContainsKey("userId") || 
                                     string.IsNullOrWhiteSpace(args["userId"]?.ToString()) ||
-                                    args["userId"]?.ToString().Contains("[ID do usuário extraído]") == true)
+                                    args["userId"]?.ToString()?.Contains("[ID do usuário extraído]") == true)
                                 {
                                     var userId = ExtractUserId(input);
                                     args["userId"] = string.IsNullOrWhiteSpace(userId) ? "user_not_found" : userId;
@@ -147,7 +147,7 @@ public class AIIntentRouter
                             {
                                 if (!args.ContainsKey("partnerId") || 
                                     string.IsNullOrWhiteSpace(args["partnerId"]?.ToString()) ||
-                                    args["partnerId"]?.ToString().Contains("[ID do parceiro extraído]") == true)
+                                    args["partnerId"]?.ToString()?.Contains("[ID do parceiro extraído]") == true)
                                 {
                                     var partnerId = ExtractPartnerId(input);
                                     args["partnerId"] = string.IsNullOrWhiteSpace(partnerId) ? "partner_not_found" : partnerId;
