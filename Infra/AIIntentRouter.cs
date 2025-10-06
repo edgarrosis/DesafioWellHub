@@ -317,18 +317,41 @@ public class AIIntentRouter
     {
         var inputLower = input.ToLowerInvariant();
 
-        // Palavras-chave para listar registros
+        // Primeiro: comandos explícitos de plugin
+        if (input.Trim().StartsWith("WellHubCorrection.CorrectCheckin", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var userId = parts.Length > 1 ? parts[1] : "user_not_found";
+            var date = parts.Length > 2 ? parts[2] : DateTime.Now.ToString("yyyy-MM-dd");
+
+            args["userId"] = userId;
+            args["date"] = date;
+
+            return ("WellHubCorrection", "CorrectCheckin", args);
+        }
+
+        if (input.Trim().StartsWith("WellHubCorrection.ReleaseCheckinLock", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var userId = parts.Length > 1 ? parts[1] : "user_not_found";
+            var date = parts.Length > 2 ? parts[2] : DateTime.Now.ToString("yyyy-MM-dd");
+
+            args["userId"] = userId;
+            args["date"] = date;
+
+            return ("WellHubCorrection", "ReleaseCheckinLock", args);
+        }
+
+        // Depois: palavras-chave genéricas
         var listKeywords = new[] { "listar", "mostrar", "lista", "dados", "registros", "simulados", "disponíveis" };
         if (listKeywords.Any(keyword => inputLower.Contains(keyword)))
         {
             return ("WellhubTransaction", "ListSimulatedRecords", args);
         }
 
-        // Palavras-chave para verificar check-in
         var verifyKeywords = new[] { "verificar", "verifique", "check-in", "checkin", "status", "transação", "transacao" };
         if (verifyKeywords.Any(keyword => inputLower.Contains(keyword)))
         {
-            // Extrair parâmetros manualmente
             var userId = ExtractUserId(input);
             var partnerId = ExtractPartnerId(input);
             var timestamp = ExtractTimestamp(input);
@@ -338,20 +361,6 @@ public class AIIntentRouter
             args["timestamp"] = string.IsNullOrEmpty(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
 
             return ("WellhubTransaction", "VerifyCheckinStatus", args);
-        }
-
-        // Fallback para WellhubCorrection
-        if (inputLower.StartsWith("wellhubcorrection.correctcheckin"))
-        {
-            // Extrai userId e data
-            var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var userId = parts.Length > 1 ? parts[1] : "user_not_found";
-            var date = parts.Length > 2 ? parts[2] : DateTime.Now.ToString("yyyy-MM-dd");
-
-            args["userId"] = userId;
-            args["date"] = date;
-
-            return ("WellhubCorrection", "CorrectCheckin", args);
         }
 
         // Nenhuma correspondência encontrada
@@ -364,8 +373,8 @@ public class AIIntentRouter
     /// </summary>
     private string GetWellhubIntentPromptTemplate(string input)
     {
-        return @$"
-Você é um assistente especializado em diagnóstico de check-ins da WellHub. Sua função é identificar intenções do usuário relacionadas à verificação de transações e status de check-in.
+        return $@"
+Você é um assistente especializado em diagnóstico de check-ins da WellHub. Sua função é identificar intenções do usuário relacionadas à verificação de transações, status de check-in e correção de check-in.
 
 Analise a entrada do usuário e determine qual função deve ser chamada de acordo com as seguintes opções disponíveis:
 
@@ -379,18 +388,34 @@ Plugin WellhubTransaction:
 - ListSimulatedRecords: Lista todos os registros simulados disponíveis para teste
   Parâmetros: nenhum
 
+Plugin WellHubCorrection:
+- CorrectCheckin: Corrige o check-in de um usuário em uma data específica
+  Parâmetros obrigatórios:
+  • userId: ID único do usuário (string)
+  • date: Data do check-in a ser corrigida (formato: yyyy-MM-dd)
+
+ATENÇÃO: Sempre que o usuário pedir para corrigir, ajustar ou liberar um check-in, use o plugin WellHubCorrection e a função CorrectCheckin.
+
 EXEMPLOS DE ENTRADA VÁLIDAS:
-- ""Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00""
-- ""Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00""
-- ""Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00""
-- ""Mostre os registros de teste disponíveis""
-- ""Liste os dados simulados""
+- Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00
+- Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00
+- Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00
+- Mostre os registros de teste disponíveis
+- Liste os dados simulados
+- Corrija o check-in do usuário user123 na data 2024-10-02
+- Corrija o check-in do usuário user456 na data 2024-10-03
+- Preciso corrigir o check-in do user456 em 2024-10-03
+- Ajuste o check-in do usuário user456 para o dia 2024-10-03
+- Libere o check-in do usuário user456 na data 2024-10-03
+- WellHubCorrection.CorrectCheckin user123 2024-10-02
+- WellHubCorrection.CorrectCheckin user456 2024-10-03
 
 PADRÕES DE EXTRAÇÃO:
+- Se o usuário pedir para corrigir, ajustar ou liberar um check-in, use o plugin WellHubCorrection.
 - Procure por IDs de usuário (user + números, ou apenas números)
 - Procure por IDs de parceiro (partner + números, estabelecimento, local)  
 - Procure por timestamps no formato ISO ou data/hora mencionados
-- Palavras-chave: check-in, transação, status, verificar, consultar, parceiro, usuário
+- Palavras-chave: check-in, transação, status, verificar, consultar, parceiro, usuário, corrigir, correção, ajustar, liberar
 
 Entrada do usuário: {input}
 
@@ -411,6 +436,16 @@ Para listar registros:
 {{
   ""plugin"": ""WellhubTransaction"",
   ""function"": ""ListSimulatedRecords""
+}}
+
+Para corrigir check-in:
+{{
+  ""plugin"": ""WellHubCorrection"",
+  ""function"": ""CorrectCheckin"",
+  ""parameters"": {{
+    ""userId"": ""[ID do usuário extraído]"",
+    ""date"": ""[data extraída no formato yyyy-MM-dd]""
+  }}
 }}
 
 Se não corresponder a nenhuma função:
