@@ -89,8 +89,6 @@ Todos os retornos seguem o padrão estruturado:
 ## Funcionalidades Implementadas
 
 - ✅ **CorrectCheckin**: Função principal de correção
-- ✅ **ListSimulatedRecords**: Função auxiliar para debugging
-- ✅ **Simulação de latência**: Simula chamadas reais ao backend
 - ✅ **Tratamento de erros**: Retorna JSON estruturado mesmo em caso de exceção
 - ✅ **Dados simulados**: Resultados consistentes para cenários mapeados
 - ✅ **JSON estruturado**: Parsing fácil pelo LLM/SK
