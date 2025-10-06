@@ -1,0 +1,102 @@
+{
+  "checkin_records": [
+    {
+      "id": "txn_001",
+      "userId": "user123",
+      "partnerId": "partner456",
+      "timestamp": "2024-10-02T10:00:00",
+      "status": "SUCESSO",
+      "details": "Check-in realizado com sucesso. Transação processada.",
+      "amount": 25.50,
+      "partner_name": "Academia FitLife Centro",
+      "user_name": "João Silva",
+      "location": {
+        "city": "São Paulo",
+        "address": "Rua Augusta, 123"
+      }
+    },
+    {
+      "id": "txn_002",
+      "userId": "user456",
+      "partnerId": "partner789",
+      "timestamp": "2024-10-01T14:30:00",
+      "status": "FALHA_SALDO",
+      "details": "Saldo insuficiente para realizar o check-in. Saldo atual: R$ 10,00",
+      "amount": 30.00,
+      "partner_name": "Smart Fit Vila Olímpia",
+      "user_name": "Maria Santos",
+      "location": {
+        "city": "São Paulo",
+        "address": "Av. Paulista, 456"
+      },
+      "error_code": "INSUFFICIENT_FUNDS",
+      "error_reason": "Saldo insuficiente na conta"
+    },
+    {
+      "id": "txn_003",
+      "userId": "user456",
+      "partnerId": "partner123",
+      "timestamp": "2024-09-28T09:15:00",
+      "status": "FALHA_LOCALIZACAO",
+      "details": "Falha na verificação de localização. GPS não detectou proximidade ao estabelecimento.",
+      "amount": 35.00,
+      "partner_name": "Bio Ritmo Moema",
+      "user_name": "Maria Santos",
+      "location": {
+        "city": "São Paulo",
+        "address": "Av. Moreira Guimarães, 789"
+      },
+      "error_code": "LOCATION_FAILED",
+      "error_reason": "Usuário não estava próximo ao estabelecimento"
+    },
+    {
+      "id": "txn_004",
+      "userId": "user999",
+      "partnerId": "partner888",
+      "timestamp": "2024-10-02T14:00:00",
+      "status": "SUCESSO",
+      "details": "Check-in confirmado. Parceiro validado.",
+      "amount": 28.75,
+      "partner_name": "Runner Academia",
+      "user_name": "Ana Costa",
+      "location": {
+        "city": "Rio de Janeiro",
+        "address": "Rua Copacabana, 321"
+      }
+    },
+    {
+      "id": "txn_005",
+      "userId": "user111",
+      "partnerId": "partner222",
+      "timestamp": "2024-10-02T16:30:00",
+      "status": "FALHA_TRANSACAO",
+      "details": "Transação negada - Saldo insuficiente - Código: TXN_002",
+      "amount": 45.00,
+      "partner_name": "CrossFit Champions",
+      "user_name": "Pedro Alves",
+      "location": {
+        "city": "Belo Horizonte",
+        "address": "Rua da Bahia, 654"
+      },
+      "error_code": "TXN_002",
+      "error_reason": "Saldo insuficiente na conta"
+    },
+    {
+      "id": "txn_006",
+      "userId": "user555",
+      "partnerId": "partner333",
+      "timestamp": "2024-10-03T08:45:00",
+      "status": "SUCESSO",
+      "details": "Check-in matinal confirmado. Desconto aplicado.",
+      "amount": 20.00,
+      "partner_name": "Yoga Studio Zen",
+      "user_name": "Beatriz Lima",
+      "location": {
+        "city": "Curitiba",
+        "address": "Rua XV de Novembro, 987"
+      },
+      "discount_applied": true,
+      "original_amount": 25.00
+    }
+  ]
+}

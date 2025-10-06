@@ -516,6 +516,53 @@ Se não corresponder a nenhuma função:
 ";
     }
 
+    private static string ExtractCustomerName(string input)
+    {
+        // Implementação simples para extrair nome do cliente
+        var patterns = new[] { @"cliente\s+(\w+)", @"usuário\s+(\w+)", @"user\s+(\w+)" };
+        
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && match.Groups.Count > 1)
+            {
+                return match.Groups[1].Value;
+            }
+        }
+        
+        return "Cliente";
+    }
+
+    private static string ExtractSituationFromInput(string input)
+    {
+        var inputLower = input.ToLower();
+        
+        if (inputLower.Contains("erro") || inputLower.Contains("falha"))
+            return "ERRO_TRANSACAO";
+        if (inputLower.Contains("reembolso") || inputLower.Contains("estorno"))
+            return "SOLICITACAO_REEMBOLSO";
+        if (inputLower.Contains("bloqueio") || inputLower.Contains("suspensão"))
+            return "CONTA_BLOQUEADA";
+        if (inputLower.Contains("cartão") || inputLower.Contains("pagamento"))
+            return "PROBLEMA_PAGAMENTO";
+            
+        return "CONSULTA_GERAL";
+    }
+
+    private static string ExtractCaseContextFromInput(string input)
+    {
+        var inputLower = input.ToLower();
+        
+        if (inputLower.Contains("urgente") || inputLower.Contains("crítico"))
+            return "ALTA_PRIORIDADE";
+        if (inputLower.Contains("reclamação") || inputLower.Contains("insatisfação"))
+            return "RECLAMACAO";
+        if (inputLower.Contains("dúvida") || inputLower.Contains("consulta"))
+            return "DUVIDA_SIMPLES";
+            
+        return "SITUACAO_PADRAO";
+    }
+
     private class RouteInfo
     {
         public string? Plugin { get; set; }

@@ -48,15 +48,6 @@ public class WellhubTransactionPlugin
             // Gera chave única para busca nos dados simulados
             var key = $"{userId}_{partnerId}_{timestamp}";
 
-            CheckinResult result;
-
-            // Verifica se existe um registro simulado específico
-            if (_simulatedData.ContainsKey(key))
-            {
-                var validationError = new CheckinResult("ERRO_VALIDACAO", "ID do usuário é obrigatório");
-                return JsonSerializer.Serialize(validationError, JsonOptions);
-            }
-
             // Se não temos todos os parâmetros, faz busca flexível por usuário
             if (string.IsNullOrWhiteSpace(partnerId) || partnerId == "partner_not_found" || 
                 string.IsNullOrWhiteSpace(timestamp) || timestamp.StartsWith("2025-"))
@@ -69,11 +60,7 @@ public class WellhubTransactionPlugin
             
             if (checkinRecord != null)
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = true,
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
-            };
-
+                var detailedResult = new CheckinResult("SUCESSO", $"Check-in confirmado para usuário {userId} no parceiro {partnerId} em {timestamp}");
                 return JsonSerializer.Serialize(detailedResult, JsonOptions);
             }
 
@@ -194,10 +181,13 @@ public class WellhubTransactionPlugin
     {
         try
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
-        };
+            var partner = await _dataManager.FindPartnerAsync(partnerId);
+            
+            if (partner == null)
+            {
+                var errorResult = new { Error = $"Parceiro {partnerId} não encontrado" };
+                return JsonSerializer.Serialize(errorResult, JsonOptions);
+            }
 
             var partnerInfo = new
             {
@@ -228,45 +218,44 @@ public class WellhubTransactionPlugin
     /// </summary>
     private async Task<string> SearchUserRecords(string userId)
     {
-        // Usa hash estável baseado nos bytes da string para consistência entre execuções
-        var hash = ComputeStableHash(userId);
-        var scenario = Math.Abs(hash) % 3;
+        try
+        {
+            var checkinRecords = await _dataManager.GetCheckinRecordsAsync();
+            var userRecords = checkinRecords.Where(r => r.UserId == userId).ToArray();
 
+            if (userRecords.Length == 0)
+            {
+                var notFoundResult = new CheckinResult("NAO_LOCALIZADO", $"Nenhum registro encontrado para o usuário {userId}");
+                return JsonSerializer.Serialize(notFoundResult, JsonOptions);
+            }
+
+            if (userRecords.Length == 1)
+            {
+                var singleRecord = userRecords[0];
                 var detailedResult = new
                 {
-                    Status = record.Status,
-                    Details = record.Details,
-                    TransactionId = record.Id,
-                    Amount = record.Amount,
-                    User = new
-                    {
-                        Id = record.UserId,
-                        Name = record.UserName,
-                        Plan = user?.Plan ?? "UNKNOWN"
-                    },
-                    Partner = new
-                    {
-                        Id = record.PartnerId,
-                        Name = record.PartnerName,
-                        Type = partner?.Type ?? "UNKNOWN",
-                        City = record.Location.City,
-                        Address = record.Location.Address
-                    },
-                    Timestamp = record.Timestamp,
-                    ErrorCode = record.ErrorCode,
-                    ErrorReason = record.ErrorReason
+                    Status = "SUCESSO",
+                    UserId = singleRecord.UserId,
+                    UserName = singleRecord.UserName,
+                    PartnerId = singleRecord.PartnerId,
+                    PartnerName = singleRecord.PartnerName,
+                    Timestamp = singleRecord.Timestamp,
+                    TransactionStatus = singleRecord.Status,
+                    Amount = singleRecord.Amount,
+                    Location = singleRecord.Location,
+                    Details = singleRecord.Details
                 };
 
                 return JsonSerializer.Serialize(detailedResult, JsonOptions);
             }
 
-            // Se encontrou múltiplos registros, retorna lista resumida
+            // Múltiplos registros encontrados
             var summaryResults = userRecords.Select(record => new
             {
-                TransactionId = record.Id,
-                Status = record.Status,
+                PartnerId = record.PartnerId,
                 PartnerName = record.PartnerName,
                 Timestamp = record.Timestamp,
+                Status = record.Status,
                 Amount = record.Amount,
                 Details = record.Details
             }).ToArray();
