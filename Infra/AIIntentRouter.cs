@@ -12,9 +12,11 @@ public class AIIntentRouter
     {
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
         _pluginFunctions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords" } }
-        };
+{
+    { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords" } },
+    { "WellhubCorrection", new List<string> { "CorrectCheckin" } } 
+};
+
     }
 
     public async Task<(string? plugin, string? function, KernelArguments args)> RouteAsync(string input)
@@ -88,6 +90,18 @@ public class AIIntentRouter
                                     args["timestamp"] = string.IsNullOrWhiteSpace(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
                                 }
                             }
+
+                            // Tratamento específico para WellhubCorrection
+                            if (routeInfo.Function.Equals("ReleaseCheckinLock", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!args.ContainsKey("userId"))
+                                args["userId"] = ExtractUserId(input) ?? "user_not_found";
+                                if (!args.ContainsKey("partnerId"))
+                                args["partnerId"] = ExtractPartnerId(input) ?? "partner_not_found";
+                                if (!args.ContainsKey("timestamp"))
+                                args["timestamp"] = ExtractTimestamp(input) ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
+                            }
+
                             
                             return (routeInfo.Plugin, routeInfo.Function, args);
                         }
@@ -319,18 +333,31 @@ public class AIIntentRouter
             var partnerId = ExtractPartnerId(input);
             var timestamp = ExtractTimestamp(input);
 
-            if (!string.IsNullOrEmpty(userId))
-            {
-                args["userId"] = userId;
-                args["partnerId"] = string.IsNullOrEmpty(partnerId) ? "partner_default" : partnerId;
-                args["timestamp"] = string.IsNullOrEmpty(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
-                
-                return ("WellhubTransaction", "VerifyCheckinStatus", args);
-            }
+            args["userId"] = string.IsNullOrEmpty(userId) ? "user_default" : userId;
+            args["partnerId"] = string.IsNullOrEmpty(partnerId) ? "partner_default" : partnerId;
+            args["timestamp"] = string.IsNullOrEmpty(timestamp) ? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") : timestamp;
+
+            return ("WellhubTransaction", "VerifyCheckinStatus", args);
         }
 
+        // Fallback para WellhubCorrection
+        if (inputLower.StartsWith("wellhubcorrection.correctcheckin"))
+        {
+            // Extrai userId e data
+            var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var userId = parts.Length > 1 ? parts[1] : "user_not_found";
+            var date = parts.Length > 2 ? parts[2] : DateTime.Now.ToString("yyyy-MM-dd");
+
+            args["userId"] = userId;
+            args["date"] = date;
+
+            return ("WellhubCorrection", "CorrectCheckin", args);
+        }
+
+        // Nenhuma correspondência encontrada
         return (null, null, args);
     }
+
 
     /// <summary>
     /// Retorna o template de prompt otimizado para roteamento de intenções da WellHub
