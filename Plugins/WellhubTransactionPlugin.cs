@@ -1,23 +1,32 @@
 using System.ComponentModel;
 using Microsoft.SemanticKernel;
 using System.Text.Json;
-using SkOfflineCourse.Infra;
 
 namespace SkOfflineCourse.Plugins;
 
 public class WellhubTransactionPlugin
 {
-    private readonly DataManager _dataManager;
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
+    // Simulação de dados para diferentes cenários de teste
+    private readonly Dictionary<string, CheckinResult> _simulatedData;
 
     public WellhubTransactionPlugin()
     {
-        _dataManager = new DataManager();
+        // Inicializa dados simulados para testes
+        _simulatedData = new Dictionary<string, CheckinResult>
+        {
+            // Cenário de sucesso
+            { "user123_partner456_2024-10-02T10:00:00", new CheckinResult("SUCESSO", "Check-in realizado com sucesso. Transação processada.") },
+            
+            // Cenário de falha na transação
+            { "user456_partner789_2024-10-02T11:30:00", new CheckinResult("FALHA_TRANSACAO", "Erro no processamento do pagamento - Código: TXN_001") },
+            
+            // Cenário de registro não localizado
+            { "user789_partner123_2024-10-02T09:15:00", new CheckinResult("NAO_LOCALIZADO", "Nenhum registro de check-in encontrado para os parâmetros informados") },
+            
+            // Dados adicionais para testes variados
+            { "user999_partner888_2024-10-02T14:00:00", new CheckinResult("SUCESSO", "Check-in confirmado. Parceiro validado.") },
+            { "user111_partner222_2024-10-02T16:30:00", new CheckinResult("FALHA_TRANSACAO", "Transação negada - Saldo insuficiente - Código: TXN_002") }
+        };
     }
 
     /// <summary>
@@ -53,33 +62,23 @@ public class WellhubTransactionPlugin
             // Verifica se existe um registro simulado específico
             if (_simulatedData.ContainsKey(key))
             {
-                var validationError = new CheckinResult("ERRO_VALIDACAO", "ID do usuário é obrigatório");
-                return JsonSerializer.Serialize(validationError, JsonOptions);
+                result = _simulatedData[key];
             }
-
-            // Se não temos todos os parâmetros, faz busca flexível por usuário
-            if (string.IsNullOrWhiteSpace(partnerId) || partnerId == "partner_not_found" || 
-                string.IsNullOrWhiteSpace(timestamp) || timestamp.StartsWith("2025-"))
+            else
             {
-                return await SearchUserRecords(userId);
+                // Para dados não encontrados nos cenários simulados, simula comportamento baseado no userId
+                result = SimulateRandomResult(userId);
             }
 
-            // Busca registro específico nos dados JSON
-            var checkinRecord = await _dataManager.FindCheckinRecordAsync(userId, partnerId, timestamp);
-            
-            if (checkinRecord != null)
+            // Serializa o resultado em JSON estruturado
+            var jsonOptions = new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 WriteIndented = true,
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
             };
 
-                return JsonSerializer.Serialize(detailedResult, JsonOptions);
-            }
-
-            // Se não encontrou registro específico, retorna não localizado
-            var notFoundResult = new CheckinResult("NAO_LOCALIZADO", $"Nenhum registro encontrado para usuário {userId}, parceiro {partnerId} no horário {timestamp}");
-            return JsonSerializer.Serialize(notFoundResult, JsonOptions);
+            return JsonSerializer.Serialize(result, jsonOptions);
         }
         catch (Exception ex)
         {
@@ -95,198 +94,45 @@ public class WellhubTransactionPlugin
     }
 
     /// <summary>
-    /// Lista todos os registros de check-in disponíveis nos dados JSON
+    /// Lista todos os registros simulados disponíveis (função auxiliar para debugging)
     /// </summary>
-    [KernelFunction, Description("Lista todos os registros de check-in disponíveis para consulta e teste")]
+    [KernelFunction, Description("Lista todos os registros de check-in simulados disponíveis para teste")]
     public async Task<string> ListSimulatedRecords()
     {
-        try
+        await Task.Delay(50); // Simula latência
+
+        var records = _simulatedData.Select(kvp => new
         {
-            var checkinRecords = await _dataManager.GetCheckinRecordsAsync();
-            var users = await _dataManager.GetUsersAsync();
-            var partners = await _dataManager.GetPartnersAsync();
+            Key = kvp.Key,
+            Status = kvp.Value.Status,
+            Details = kvp.Value.Detalhes
+        }).ToList();
 
-            var summaryRecords = checkinRecords.Select(record => new
-            {
-                TransactionId = record.Id,
-                UserId = record.UserId,
-                UserName = record.UserName,
-                PartnerId = record.PartnerId,
-                PartnerName = record.PartnerName,
-                PartnerType = partners.FirstOrDefault(p => p.Id == record.PartnerId)?.Type ?? "UNKNOWN",
-                Timestamp = record.Timestamp,
-                Status = record.Status,
-                Amount = record.Amount,
-                City = record.Location.City,
-                Details = record.Details,
-                ExampleQuery = $"Verifique o check-in do usuário {record.UserId} no parceiro {record.PartnerId} em {record.Timestamp}"
-            }).ToList();
-
-            var result = new
-            {
-                TotalRecords = summaryRecords.Count,
-                Records = summaryRecords,
-                Instructions = new
-                {
-                    Usage = "Use os dados acima para testar verificações de check-in",
-                    ExampleQueries = summaryRecords.Take(3).Select(r => r.ExampleQuery).ToArray()
-                }
-            };
-
-            return JsonSerializer.Serialize(result, JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            var errorResult = new { Error = $"Erro ao listar registros: {ex.Message}" };
-            return JsonSerializer.Serialize(errorResult, JsonOptions);
-        }
-    }
-
-    /// <summary>
-    /// Consulta informações detalhadas de um usuário
-    /// </summary>
-    [KernelFunction, Description("Consulta informações detalhadas de um usuário do sistema WellHub")]
-    public async Task<string> GetUserInfo(
-        [Description("ID único do usuário")] string userId)
-    {
-        try
-        {
-            var user = await _dataManager.FindUserAsync(userId);
-            
-            if (user == null)
-            {
-                var notFound = new { Error = $"Usuário {userId} não encontrado" };
-                return JsonSerializer.Serialize(notFound, JsonOptions);
-            }
-
-            var userInfo = new
-            {
-                Id = user.Id,
-                Name = user.Name,
-                Email = user.Email,
-                Phone = user.Phone,
-                Plan = user.Plan,
-                Status = user.Status,
-                CreditBalance = user.CreditBalance,
-                MonthlyLimit = user.MonthlyLimit,
-                Location = user.Location,
-                PreferredActivities = user.PreferredActivities,
-                RegistrationDate = user.RegistrationDate,
-                PaymentIssue = user.PaymentIssue,
-                SuspensionReason = user.SuspensionReason
-            };
-
-            return JsonSerializer.Serialize(userInfo, JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            var errorResult = new { Error = $"Erro ao consultar usuário: {ex.Message}" };
-            return JsonSerializer.Serialize(errorResult, JsonOptions);
-        }
-    }
-
-    /// <summary>
-    /// Consulta informações detalhadas de um parceiro
-    /// </summary>
-    [KernelFunction, Description("Consulta informações detalhadas de um parceiro/estabelecimento do sistema WellHub")]
-    public async Task<string> GetPartnerInfo(
-        [Description("ID único do parceiro/estabelecimento")] string partnerId)
-    {
-        try
+        var jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
         };
 
-            var partnerInfo = new
-            {
-                Id = partner.Id,
-                Name = partner.Name,
-                Type = partner.Type,
-                City = partner.City,
-                Address = partner.Address,
-                Phone = partner.Phone,
-                Email = partner.Email,
-                OperatingHours = partner.OperatingHours,
-                Services = partner.Services,
-                Active = partner.Active,
-                ClosureReason = partner.ClosureReason
-            };
-
-            return JsonSerializer.Serialize(partnerInfo, JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            var errorResult = new { Error = $"Erro ao consultar parceiro: {ex.Message}" };
-            return JsonSerializer.Serialize(errorResult, JsonOptions);
-        }
+        return JsonSerializer.Serialize(records, jsonOptions);
     }
 
     /// <summary>
-    /// Busca todos os registros de check-in de um usuário específico
+    /// Simula um resultado baseado no padrão do userId para casos não mapeados
     /// </summary>
-    private async Task<string> SearchUserRecords(string userId)
+    private CheckinResult SimulateRandomResult(string userId)
     {
         // Usa hash estável baseado nos bytes da string para consistência entre execuções
         var hash = ComputeStableHash(userId);
         var scenario = Math.Abs(hash) % 3;
 
-                var detailedResult = new
-                {
-                    Status = record.Status,
-                    Details = record.Details,
-                    TransactionId = record.Id,
-                    Amount = record.Amount,
-                    User = new
-                    {
-                        Id = record.UserId,
-                        Name = record.UserName,
-                        Plan = user?.Plan ?? "UNKNOWN"
-                    },
-                    Partner = new
-                    {
-                        Id = record.PartnerId,
-                        Name = record.PartnerName,
-                        Type = partner?.Type ?? "UNKNOWN",
-                        City = record.Location.City,
-                        Address = record.Location.Address
-                    },
-                    Timestamp = record.Timestamp,
-                    ErrorCode = record.ErrorCode,
-                    ErrorReason = record.ErrorReason
-                };
-
-                return JsonSerializer.Serialize(detailedResult, JsonOptions);
-            }
-
-            // Se encontrou múltiplos registros, retorna lista resumida
-            var summaryResults = userRecords.Select(record => new
-            {
-                TransactionId = record.Id,
-                Status = record.Status,
-                PartnerName = record.PartnerName,
-                Timestamp = record.Timestamp,
-                Amount = record.Amount,
-                Details = record.Details
-            }).ToArray();
-
-            var multipleResult = new
-            {
-                Message = $"Encontrados {userRecords.Length} registros para o usuário {userId}",
-                UserId = userId,
-                UserName = userRecords[0].UserName,
-                Records = summaryResults,
-                Suggestion = "Use um comando mais específico com parceiro e timestamp para ver detalhes completos"
-            };
-
-            return JsonSerializer.Serialize(multipleResult, JsonOptions);
-        }
-        catch (Exception ex)
+        return scenario switch
         {
-            var errorResult = new CheckinResult("FALHA_TRANSACAO", $"Erro na busca por registros do usuário: {ex.Message}");
-            return JsonSerializer.Serialize(errorResult, JsonOptions);
-        }
+            0 => new CheckinResult("SUCESSO", "Check-in processado com sucesso."),
+            1 => new CheckinResult("FALHA_TRANSACAO", $"Erro de transação - Código: TXN_{Math.Abs(hash) % 100:D3}"),
+            _ => new CheckinResult("NAO_LOCALIZADO", "Registro de check-in não encontrado na base de dados.")
+        };
     }
 
     /// <summary>
