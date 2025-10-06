@@ -13,6 +13,10 @@ var kernelBuilder = Kernel.CreateBuilder();
 
 try
 {
+    // Configuração para o modelo de linguagem local via HTTP
+    // IMPORTANTE: Verifique se o modelo llama3.2:3b está disponível em sua instalação Ollama
+    // Para verificar: ollama list
+    // Para baixar: ollama pull llama3.2:3b
     kernelBuilder.AddOpenAIChatCompletion(
         modelId: "llama3.2:3b",
         apiKey: "apiKey",
@@ -37,17 +41,29 @@ var wellhubCommunication = new WellhubCommunicationPlugin(kernel);
 kernel.ImportPluginFromObject(wellhubTransaction, "WellhubTransaction");
 kernel.ImportPluginFromObject(wellhubCommunication, "WellhubCommunication");
 
-Console.WriteLine("=== �‍♂️ WellHub - Assistente Inteligente ===");
-Console.WriteLine("Sistema com respostas humanizadas integradas aos dados reais");
+// Router usando LLM
+var router = new AIIntentRouter(kernel);
+
+Console.WriteLine("=== 🏥 Assistente de Diagnóstico WellHub ===");
+Console.WriteLine("Sistema especializado em verificação de check-ins e transações");
 Console.WriteLine();
-Console.WriteLine("💬 Exemplos de consultas:");
-Console.WriteLine("  • \"Como está a situação do usuário user123?\"");
-Console.WriteLine("  • \"Mostre o resumo da conta do João Silva\"");
-Console.WriteLine("  • \"Verifique os check-ins do user456\"");
-Console.WriteLine("  • \"Analise as falhas do usuário user789\"");
-Console.WriteLine("  • \"Status do parceiro Smart Fit\"");
+Console.WriteLine("🔍 Verificações disponíveis:");
 Console.WriteLine();
-Console.WriteLine("Digite sua pergunta ou comando ('sair' para encerrar):");
+Console.WriteLine("📊 Verificar Status de Check-in:");
+Console.WriteLine("  • \"Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00\"");
+Console.WriteLine("  • \"Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00\"");
+Console.WriteLine("  • \"Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00\"");
+Console.WriteLine();
+Console.WriteLine("📋 Registros de Teste:");
+Console.WriteLine("  • \"Mostre os registros de teste disponíveis\"");
+Console.WriteLine("  • \"Liste os dados simulados\"");
+Console.WriteLine();
+Console.WriteLine("🎯 Cenários de teste pré-configurados:");
+Console.WriteLine("  • user123 + partner456 + 2024-10-02T10:00:00 → SUCESSO");
+Console.WriteLine("  • user456 + partner789 + 2024-10-02T11:30:00 → FALHA_TRANSACAO");
+Console.WriteLine("  • user789 + partner123 + 2024-10-02T09:15:00 → NAO_LOCALIZADO");
+Console.WriteLine();
+Console.WriteLine("Digite 'sair' ou 'exit' para encerrar");
 Console.WriteLine("----------------------------------------");
 
 while (true)

@@ -35,8 +35,23 @@ public class WellhubTransactionPlugin
     {
         try
         {
-            // Valida se pelo menos userId foi fornecido
-            if (string.IsNullOrWhiteSpace(userId))
+            // Validação de parâmetros obrigatórios
+            var validationResult = ValidateCheckinParameters(userId, partnerId, timestamp);
+            if (validationResult != null)
+            {
+                return JsonSerializer.Serialize(validationResult);
+            }
+
+            // Simula latência de uma consulta real ao backend
+            await Task.Delay(100);
+
+            // Gera chave única para busca nos dados simulados
+            var key = $"{userId}_{partnerId}_{timestamp}";
+
+            CheckinResult result;
+
+            // Verifica se existe um registro simulado específico
+            if (_simulatedData.ContainsKey(key))
             {
                 var validationError = new CheckinResult("ERRO_VALIDACAO", "ID do usuário é obrigatório");
                 return JsonSerializer.Serialize(validationError, JsonOptions);
@@ -54,35 +69,10 @@ public class WellhubTransactionPlugin
             
             if (checkinRecord != null)
             {
-                // Busca informações complementares
-                var user = await _dataManager.FindUserAsync(userId);
-                var partner = await _dataManager.FindPartnerAsync(partnerId);
-
-                // Retorna dados detalhados do JSON
-                var detailedResult = new
-                {
-                    Status = checkinRecord.Status,
-                    Details = checkinRecord.Details,
-                    TransactionId = checkinRecord.Id,
-                    Amount = checkinRecord.Amount,
-                    User = new
-                    {
-                        Id = checkinRecord.UserId,
-                        Name = checkinRecord.UserName,
-                        Plan = user?.Plan ?? "UNKNOWN"
-                    },
-                    Partner = new
-                    {
-                        Id = checkinRecord.PartnerId,
-                        Name = checkinRecord.PartnerName,
-                        Type = partner?.Type ?? "UNKNOWN",
-                        City = checkinRecord.Location.City,
-                        Address = checkinRecord.Location.Address
-                    },
-                    Timestamp = checkinRecord.Timestamp,
-                    ErrorCode = checkinRecord.ErrorCode,
-                    ErrorReason = checkinRecord.ErrorReason
-                };
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
+            };
 
                 return JsonSerializer.Serialize(detailedResult, JsonOptions);
             }
@@ -95,7 +85,12 @@ public class WellhubTransactionPlugin
         {
             // Em caso de erro, retorna um resultado de falha estruturado
             var errorResult = new CheckinResult("FALHA_TRANSACAO", $"Erro interno do sistema: {ex.Message}");
-            return JsonSerializer.Serialize(errorResult, JsonOptions);
+            return JsonSerializer.Serialize(errorResult, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
+            });
         }
     }
 
@@ -199,13 +194,10 @@ public class WellhubTransactionPlugin
     {
         try
         {
-            var partner = await _dataManager.FindPartnerAsync(partnerId);
-            
-            if (partner == null)
-            {
-                var notFound = new { Error = $"Parceiro {partnerId} não encontrado" };
-                return JsonSerializer.Serialize(notFound, JsonOptions);
-            }
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
+        };
 
             var partnerInfo = new
             {
@@ -236,23 +228,9 @@ public class WellhubTransactionPlugin
     /// </summary>
     private async Task<string> SearchUserRecords(string userId)
     {
-        try
-        {
-            var allRecords = await _dataManager.GetCheckinRecordsAsync();
-            var userRecords = allRecords.Where(r => r.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase)).ToArray();
-
-            if (!userRecords.Any())
-            {
-                var notFound = new CheckinResult("NAO_LOCALIZADO", $"Nenhum registro de check-in encontrado para o usuário {userId}");
-                return JsonSerializer.Serialize(notFound, JsonOptions);
-            }
-
-            // Se encontrou apenas um registro, retorna detalhado
-            if (userRecords.Length == 1)
-            {
-                var record = userRecords[0];
-                var user = await _dataManager.FindUserAsync(userId);
-                var partner = await _dataManager.FindPartnerAsync(record.PartnerId);
+        // Usa hash estável baseado nos bytes da string para consistência entre execuções
+        var hash = ComputeStableHash(userId);
+        var scenario = Math.Abs(hash) % 3;
 
                 var detailedResult = new
                 {
@@ -309,6 +287,58 @@ public class WellhubTransactionPlugin
             var errorResult = new CheckinResult("FALHA_TRANSACAO", $"Erro na busca por registros do usuário: {ex.Message}");
             return JsonSerializer.Serialize(errorResult, JsonOptions);
         }
+    }
+
+    /// <summary>
+    /// Valida os parâmetros de entrada para verificação de check-in
+    /// </summary>
+    private static CheckinResult? ValidateCheckinParameters(string userId, string partnerId, string timestamp)
+    {
+        // Validação de userId
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", "UserId é obrigatório e não pode estar vazio.");
+        }
+
+        // Validação de partnerId
+        if (string.IsNullOrWhiteSpace(partnerId))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", "PartnerId é obrigatório e não pode estar vazio.");
+        }
+
+        // Validação de timestamp
+        if (string.IsNullOrWhiteSpace(timestamp))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", "Timestamp é obrigatório e não pode estar vazio.");
+        }
+
+        // Validação de formato de timestamp
+        if (!DateTime.TryParse(timestamp, out _))
+        {
+            return new CheckinResult("PARAMETRO_INVALIDO", 
+                "Timestamp deve estar no formato válido (ex: 2024-10-02T10:00:00).");
+        }
+
+        return null; // Todos os parâmetros são válidos
+    }
+
+    /// <summary>
+    /// Computa um hash estável baseado nos bytes da string para garantir consistência entre execuções
+    /// </summary>
+    private static int ComputeStableHash(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return 0;
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(input);
+        int hash = 17;
+        
+        foreach (byte b in bytes)
+        {
+            hash = hash * 31 + b;
+        }
+        
+        return hash;
     }
 }
 

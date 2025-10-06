@@ -12,22 +12,22 @@ public class AIIntentRouter
     // Regex patterns compilados para melhor performance
     private static readonly Regex[] UserIdPatterns = new[]
     {
-        new Regex(@"(user\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura user123 completo
-        new Regex(@"(user\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura userABC completo
-        new Regex(@"usuário\s*(user\w+|user\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-        new Regex(@"usuario\s*(user\w+|user\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-        new Regex(@"id\s*do\s*usuário\s*(user\w+|user\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"user\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"usuário\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"usuario\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"id\s*do\s*usuário\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"user\d+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         new Regex(@"\busr\w*\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase)
     };
 
     private static readonly Regex[] PartnerIdPatterns = new[]
     {
-        new Regex(@"(partner\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura partner456 completo
-        new Regex(@"(partner\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase), // Captura partnerABC completo
-        new Regex(@"parceiro\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-        new Regex(@"estabelecimento\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-        new Regex(@"local\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-        new Regex(@"id\s*do\s*parceiro\s*(partner\w+|partner\d+|\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase)
+        new Regex(@"partner\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"parceiro\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"estabelecimento\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"local\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"id\s*do\s*parceiro\s*(\w+)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"partner\d+", RegexOptions.Compiled | RegexOptions.IgnoreCase)
     };
 
     private static readonly Regex[] DateTimePatterns = new[]
@@ -59,74 +59,7 @@ public class AIIntentRouter
 
         try
         {
-            var prompt = @$"
-Você é um assistente especializado da WellHub para diagnóstico de check-ins e comunicação humanizada.
-
-Analise a entrada do usuário e determine qual função chamar:
-
-Plugin WellhubTransaction:
-- VerifyCheckinStatus: Verifica status de check-in (parâmetros: userId, partnerId, timestamp)
-- ListSimulatedRecords: Lista registros de teste (sem parâmetros)
-- GetUserInfo: Consulta informações de usuário (parâmetros: userId)
-- GetPartnerInfo: Consulta informações de parceiro (parâmetros: partnerId)
-
-Plugin WellhubCommunication:
-- GenerateResolutionMessage: Gera resposta humanizada (parâmetros: caseContext, actionTaken, resultStatus)
-- GenerateTemplatedResponse: Usa templates específicos (parâmetros: scenarioType, customerName, situationDetails)
-- AdjustMessageTone: Ajusta tom da mensagem (parâmetros: originalMessage, urgencyLevel, sensitivityLevel)
-
-EXEMPLOS:
-- ""Verifique user123 partner456"" → WellhubTransaction.VerifyCheckinStatus
-- ""Liste os dados"" ou ""Liste users"" → WellhubTransaction.ListSimulatedRecords
-- ""Consulte usuário user123"" → WellhubTransaction.GetUserInfo
-- ""Informações do parceiro partner456"" → WellhubTransaction.GetPartnerInfo
-- ""Gere resposta para cliente com cobrança"" → WellhubCommunication.GenerateResolutionMessage
-
-Entrada: {input}
-
-Responda APENAS JSON:
-
-Para verificar check-in:
-{{
-  ""plugin"": ""WellhubTransaction"",
-  ""function"": ""VerifyCheckinStatus"",
-  ""parameters"": {{
-    ""userId"": ""[ID do usuário extraído]"",
-    ""partnerId"": ""[ID do parceiro extraído]"",
-    ""timestamp"": ""[timestamp no formato yyyy-MM-ddTHH:mm:ss]""
-  }}
-}}
-
-Para listar registros:
-{{
-  ""plugin"": ""WellhubTransaction"",
-  ""function"": ""ListSimulatedRecords""
-}}
-
-Para consultar usuário:
-{{
-  ""plugin"": ""WellhubTransaction"",
-  ""function"": ""GetUserInfo"",
-  ""parameters"": {{
-    ""userId"": ""[ID do usuário extraído]""
-  }}
-}}
-
-Para consultar parceiro:
-{{
-  ""plugin"": ""WellhubTransaction"",
-  ""function"": ""GetPartnerInfo"",
-  ""parameters"": {{
-    ""partnerId"": ""[ID do parceiro extraído]""
-  }}
-}}
-
-Se não corresponder a nenhuma função:
-{{
-  ""plugin"": null,
-  ""function"": null
-}}
-";
+            var prompt = GetWellhubIntentPromptTemplate(input);
 
             var result = await _kernel.InvokePromptAsync(prompt);
             var response = result.ToString().Trim();
@@ -521,55 +454,66 @@ Se não corresponder a nenhuma função:
         return (null, null, args);
     }
 
-    private string ExtractCaseContextFromInput(string input)
+    /// <summary>
+    /// Retorna o template de prompt otimizado para roteamento de intenções da WellHub
+    /// </summary>
+    private string GetWellhubIntentPromptTemplate(string input)
     {
-        // Extrai contexto da situação do cliente
-        var keywords = new[] { "problema", "cobrança", "check-in", "acesso", "erro", "falha", "cliente" };
-        var foundKeywords = keywords.Where(k => input.ToLowerInvariant().Contains(k)).ToList();
-        
-        if (foundKeywords.Any())
-        {
-            return $"Cliente relatou: {string.Join(", ", foundKeywords)}. Situação: {input}";
-        }
-        
-        return $"Situação reportada pelo cliente: {input}";
-    }
+        return @$"
+Você é um assistente especializado em diagnóstico de check-ins da WellHub. Sua função é identificar intenções do usuário relacionadas à verificação de transações e status de check-in.
 
-    private string ExtractCustomerName(string input)
-    {
-        // Buscar padrões para nome de usuário/cliente
-        var patterns = new[]
-        {
-            @"para\s+([A-Za-z0-9_-]+)", // "para user123"
-            @"cliente\s+([A-Za-z0-9_-]+)", // "cliente joão"
-            @"usuário\s+([A-Za-z0-9_-]+)", // "usuário maria"
-            @"usuario\s+([A-Za-z0-9_-]+)", // "usuario carlos"
-            @"user\s+([A-Za-z0-9_-]+)", // "user teste"
-        };
-        
-        foreach (var pattern in patterns)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (match.Success && match.Groups.Count > 1)
-            {
-                return match.Groups[1].Value;
-            }
-        }
-        
-        return string.Empty;
-    }
+Analise a entrada do usuário e determine qual função deve ser chamada de acordo com as seguintes opções disponíveis:
 
-    private string ExtractSituationFromInput(string input)
-    {
-        // Extrai detalhes específicos da situação
-        if (input.ToLowerInvariant().Contains("cobrança"))
-            return "Cobrança indevida identificada na conta do cliente";
-        if (input.ToLowerInvariant().Contains("check-in"))
-            return "Dificuldades para realizar check-in no aplicativo";
-        if (input.ToLowerInvariant().Contains("acesso"))
-            return "Problemas de acesso à plataforma";
-        
-        return "Situação específica do cliente necessita atenção";
+Plugin WellhubTransaction:
+- VerifyCheckinStatus: Verifica o status de check-in e transação de um usuário
+  Parâmetros obrigatórios:
+  • userId: ID único do usuário (string)
+  • partnerId: ID do parceiro/estabelecimento (string) 
+  • timestamp: Data e hora do check-in no formato yyyy-MM-ddTHH:mm:ss (string)
+
+- ListSimulatedRecords: Lista todos os registros simulados disponíveis para teste
+  Parâmetros: nenhum
+
+EXEMPLOS DE ENTRADA VÁLIDAS:
+- ""Verifique o check-in do usuário user123 no parceiro partner456 em 2024-10-02T10:00:00""
+- ""Consulte o status da transação do usuário user789 no estabelecimento partner123 às 2024-10-02T09:15:00""
+- ""Verificar check-in de user456 em partner789 no horário 2024-10-02T11:30:00""
+- ""Mostre os registros de teste disponíveis""
+- ""Liste os dados simulados""
+
+PADRÕES DE EXTRAÇÃO:
+- Procure por IDs de usuário (user + números, ou apenas números)
+- Procure por IDs de parceiro (partner + números, estabelecimento, local)  
+- Procure por timestamps no formato ISO ou data/hora mencionados
+- Palavras-chave: check-in, transação, status, verificar, consultar, parceiro, usuário
+
+Entrada do usuário: {input}
+
+Responda APENAS em formato JSON válido:
+
+Para verificar check-in:
+{{
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""VerifyCheckinStatus"",
+  ""parameters"": {{
+    ""userId"": ""[ID do usuário extraído]"",
+    ""partnerId"": ""[ID do parceiro extraído]"",
+    ""timestamp"": ""[timestamp no formato yyyy-MM-ddTHH:mm:ss]""
+  }}
+}}
+
+Para listar registros:
+{{
+  ""plugin"": ""WellhubTransaction"",
+  ""function"": ""ListSimulatedRecords""
+}}
+
+Se não corresponder a nenhuma função:
+{{
+  ""plugin"": null,
+  ""function"": null
+}}
+";
     }
 
     private class RouteInfo
