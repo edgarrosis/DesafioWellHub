@@ -46,6 +46,12 @@ kernel.ImportPluginFromObject(wellhubCorrection, "WellhubCorrection");
 // Router usando LLM
 var router = new AIIntentRouter(kernel);
 
+// Inicializa o sistema de login
+var loginManager = new UserLoginManager(kernel);
+
+// Exibe a tela de login primeiro
+loginManager.ShowLoginScreen();
+
 Console.WriteLine("=== 🏥 Assistente WellHub ===");
 Console.WriteLine("Sistema inteligente para verificação de check-ins, transações e atendimento ao cliente");
 Console.WriteLine();
@@ -80,7 +86,7 @@ Console.WriteLine();
 Console.WriteLine("🔧 Correções de Check-in:");
 Console.WriteLine("  • \"Libere o check-in do usuário user123 para 2024-10-02\"");
 Console.WriteLine("  • \"Corrija o check-in do user456 em 2024-10-03\"");
-Console.WriteLine("  • \"Liste os registros de correção disponíveis\"");
+Console.WriteLine("  • \"Liste os registros com falhas para correção\"");
 Console.WriteLine();
 Console.WriteLine("Digite 'sair' ou 'exit' para encerrar");
 Console.WriteLine("----------------------------------------");
@@ -126,34 +132,51 @@ async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin tra
         var records = parsedData.GetProperty("records");
         var totalRecords = parsedData.GetProperty("totalRecords").GetInt32();
         
-        // Criar resumo simplificado para a LLM focado em LISTAR registros disponíveis
+        // Contar sucessos e falhas reais dos dados
+        int sucessos = 0;
+        int falhas = 0;
+        var sucessosLista = new List<string>();
+        var falhasLista = new List<string>();
+        
+        foreach (var record in records.EnumerateArray())
+        {
+            var status = record.TryGetProperty("status", out var st) ? st.GetString() : "";
+            var userName = record.TryGetProperty("user_name", out var un) ? un.GetString() : "N/A";
+            var partnerName = record.TryGetProperty("partner_name", out var pn) ? pn.GetString() : "N/A";
+            var amount = record.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0;
+            var details = record.TryGetProperty("details", out var det) ? det.GetString() : "";
+            
+            if (status == "SUCESSO")
+            {
+                sucessos++;
+                sucessosLista.Add($"• {userName} → {partnerName} - R$ {amount:F2}");
+            }
+            else
+            {
+                falhas++;
+                var errorReason = record.TryGetProperty("error_reason", out var er) ? er.GetString() : status;
+                falhasLista.Add($"• {userName} → {partnerName} - {errorReason}");
+            }
+        }
+        
+        // Criar resumo baseado nos dados reais
         var summary = $@"RELATÓRIO GERAL DE REGISTROS WELLHUB
 
 📊 VISÃO GERAL:
 • Total de registros: {totalRecords}
-• Transações bem-sucedidas: 3 (50%)
-• Transações com falha: 3 (50%)
+• Transações bem-sucedidas: {sucessos} ({(totalRecords > 0 ? (sucessos * 100 / totalRecords) : 0)}%)
+• Transações com falha: {falhas} ({(totalRecords > 0 ? (falhas * 100 / totalRecords) : 0)}%)
 
 ✅ CHECK-INS BEM-SUCEDIDOS:
-• João Silva → Academia FitLife Centro (SP) - R$ 25,50
-• Ana Costa → Runner Academia (RJ) - R$ 28,75  
-• Beatriz Lima → Yoga Studio Zen (Curitiba) - R$ 20,00
+{string.Join("\n", sucessosLista.Take(5))}
 
 ❌ CHECK-INS COM PROBLEMAS:
-• Maria Santos → Smart Fit Vila Olímpia - FALHA: Saldo insuficiente
-• Maria Santos → Bio Ritmo Moema - FALHA: Problema de localização
-• Pedro Alves → CrossFit Champions - FALHA: Transação negada
+{string.Join("\n", falhasLista.Take(5))}
 
-🏢 ESTABELECIMENTOS ATIVOS:
-• 3 Academias tradicionais
-• 1 CrossFit
-• 1 Estúdio de Yoga
-• Presença em: São Paulo, Rio de Janeiro, Belo Horizonte, Curitiba
-
-⚠️ PRINCIPAIS DESAFIOS IDENTIFICADOS:
-• Saldo insuficiente (40% das falhas)
-• Problemas de localização GPS (20% das falhas)
-• Falhas de transação (40% das falhas)";
+⚠️ ANÁLISE DOS DADOS:
+• {sucessos} transações processadas com sucesso
+• {falhas} transações que necessitam atenção
+• Dados extraídos diretamente do sistema WellHub";
         
         // Gerar resposta humanizada baseada no resumo
         var humanizedResponse = await communicationPlugin.GenerateTemplatedResponse(
@@ -177,8 +200,8 @@ async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin tra
         // Processar dados do usuário para criar resumo focado
         var userData = JsonSerializer.Deserialize<JsonElement>(userDataJson);
         var userName = userData.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : userId;
-        var planType = userData.TryGetProperty("planType", out var planElement) ? planElement.GetString() : "N/A";
-        var balance = userData.TryGetProperty("balance", out var balanceElement) ? balanceElement.GetDecimal() : 0;
+        var planType = userData.TryGetProperty("plan", out var planElement) ? planElement.GetString() : "N/A";
+        var balance = userData.TryGetProperty("creditBalance", out var balanceElement) ? balanceElement.GetDecimal() : 0;
         var status = userData.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : "N/A";
         
         // Buscar check-ins específicos do usuário
@@ -215,7 +238,7 @@ async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin tra
             }
         }
         
-        // Criar resumo específico do usuário
+        // Criar resumo específico do usuário SEM vazar informações de outros
         var userSummary = $@"RESUMO DA CONTA - {userName ?? userId}
 
 👤 INFORMAÇÕES PESSOAIS:
@@ -224,18 +247,18 @@ async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin tra
 • Saldo atual: R$ {balance:F2}
 • Status da conta: {status}
 
-📊 HISTÓRICO DE CHECK-INS:
+📊 HISTÓRICO DE CHECK-INS PESSOAIS:
 • Total de tentativas: {userSuccesses + userFailures}
 • Check-ins bem-sucedidos: {userSuccesses}
 • Check-ins com problemas: {userFailures}
 • Taxa de sucesso: {(userSuccesses + userFailures > 0 ? (userSuccesses * 100 / (userSuccesses + userFailures)) : 0):F0}%
 
-📋 DETALHES DOS CHECK-INS:
-{string.Join("\n", userCheckins.Take(5))}
+{(userCheckins.Count > 0 ? $@"📋 SEUS CHECK-INS RECENTES:
+{string.Join("\n", userCheckins.Take(3))}" : "📋 NENHUM CHECK-IN ENCONTRADO PARA ESTE USUÁRIO")}
 
 💡 RECOMENDAÇÕES PERSONALIZADAS:
 {(balance < 50 ? "• Considere recarregar seu saldo para evitar falhas por saldo insuficiente" : "• Saldo adequado para check-ins")}
-{(userFailures > userSuccesses ? "• Revise os horários e localizações para melhorar taxa de sucesso" : "• Continue com o ótimo trabalho!")}";
+{(userFailures > userSuccesses && userSuccesses + userFailures > 0 ? "• Revise os horários e localizações para melhorar taxa de sucesso" : userSuccesses > 0 ? "• Continue com o ótimo trabalho!" : "• Experimente fazer seu primeiro check-in!")}";
         
         // Gerar resposta humanizada baseada no resumo específico do usuário
         var humanizedResponse = await communicationPlugin.GenerateTemplatedResponse(
@@ -280,6 +303,28 @@ async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin tra
     else if (inputLower.Contains("parceiro") || inputLower.Contains("estabelecimento") || inputLower.Contains("academia") || inputLower.Contains("partner"))
     {
         return await GeneratePartnerInfo(input, transactionPlugin, communicationPlugin);
+    }
+    else if ((inputLower.Contains("liste") || inputLower.Contains("mostrar")) && 
+             (inputLower.Contains("falhas") || inputLower.Contains("registros") && inputLower.Contains("correção")))
+    {
+        // Listar registros com falhas para correção
+        try
+        {
+            var result = await correctionPlugin.ListFailedRecords();
+            
+            // Gerar resposta humanizada
+            var humanizedResponse = await communicationPlugin.GenerateTemplatedResponse(
+                "FAILED_RECORDS", 
+                "Administrador", 
+                result
+            );
+            
+            return humanizedResponse;
+        }
+        catch (Exception ex)
+        {
+            return $"❌ Erro ao listar registros com falhas: {ex.Message}";
+        }
     }
     else if (inputLower.Contains("libere") || inputLower.Contains("corrija") || inputLower.Contains("corrigi") || 
              (inputLower.Contains("check") && (inputLower.Contains("liberar") || inputLower.Contains("corrigir"))))
@@ -688,36 +733,52 @@ async Task<string> GeneratePartnerInfo(string input, WellhubTransactionPlugin tr
         var partnerInfoJson = await transactionPlugin.GetPartnerInfo(partnerId);
         var partnerInfo = JsonSerializer.Deserialize<JsonElement>(partnerInfoJson);
         
-        var nome = partnerInfo.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : partnerId;
-        var tipo = partnerInfo.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "N/A";
-        var status = partnerInfo.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : "N/A";
-        var localizacao = partnerInfo.TryGetProperty("location", out var locationElement) ? locationElement.GetString() : "N/A";
-        var cidade = partnerInfo.TryGetProperty("city", out var cityElement) ? cityElement.GetString() : "N/A";
-        var endereco = partnerInfo.TryGetProperty("address", out var addressElement) ? addressElement.GetString() : "N/A";
+        // Usar as propriedades corretas que vêm do JSON (case-sensitive)
+        var nome = partnerInfo.TryGetProperty("Name", out var nameElement) ? nameElement.GetString() : partnerId;
+        var tipo = partnerInfo.TryGetProperty("Type", out var typeElement) ? typeElement.GetString() : "N/A";
+        var cidade = partnerInfo.TryGetProperty("City", out var cityElement) ? cityElement.GetString() : "N/A";
+        var endereco = partnerInfo.TryGetProperty("Address", out var addressElement) ? addressElement.GetString() : "N/A";
+        var telefone = partnerInfo.TryGetProperty("Phone", out var phoneElement) ? phoneElement.GetString() : "N/A";
+        var email = partnerInfo.TryGetProperty("Email", out var emailElement) ? emailElement.GetString() : "N/A";
+        var horarios = partnerInfo.TryGetProperty("OperatingHours", out var hoursElement) ? hoursElement.GetString() : "N/A";
+        var servicos = partnerInfo.TryGetProperty("Services", out var servicesElement) ? servicesElement.GetString() : "N/A";
+        var motivoFechamento = partnerInfo.TryGetProperty("ClosureReason", out var closureElement) ? closureElement.GetString() : null;
         
+        // Verificar status ativo/inativo corretamente
+        bool isActive = partnerInfo.TryGetProperty("Active", out var activeElement) && activeElement.GetBoolean();
+                       
         // Criar resumo detalhado para a LLM
+        var statusTexto = isActive ? "ATIVO" : "INATIVO";
         var infoParceiro = $@"INFORMAÇÕES DETALHADAS DO ESTABELECIMENTO
 
 🏢 DADOS BÁSICOS:
 • Nome: {nome}
 • Tipo de estabelecimento: {tipo}
-• Status operacional: {status}
+• Status operacional: {statusTexto}
 • ID no sistema: {partnerId}
 
 📍 LOCALIZAÇÃO:
 • Cidade: {cidade}
-• Bairro/Região: {localizacao}
 • Endereço: {endereco}
+• Telefone: {telefone}
+• E-mail: {email}
+
+⏰ FUNCIONAMENTO:
+• Horários de funcionamento: {horarios}
+• Serviços oferecidos: {servicos}
 
 ✅ SITUAÇÃO ATUAL:
-• Status: {(status?.ToUpper() == "ACTIVE" ? "✅ ATIVO - Funcionando normalmente" : "⚠️ INATIVO - Com restrições")}
-• Disponível para check-ins: {(status?.ToUpper() == "ACTIVE" ? "Sim" : "Não")}
+• Status: {(isActive ? "✅ ATIVO - Funcionando normalmente" : "⚠️ INATIVO - Com restrições")}
+• Disponível para check-ins: {(isActive ? "Sim, disponível para reservas" : "Não, temporariamente indisponível")}
+{(isActive ? "" : $"• Motivo da indisponibilidade: {motivoFechamento}")}
 • Última atualização: Dados atualizados
 
 📋 INFORMAÇÕES PARA O CLIENTE:
-• Este estabelecimento está {(status?.ToUpper() == "ACTIVE" ? "disponível" : "temporariamente indisponível")} para check-ins
-• Localizado em {cidade}, região {localizacao}
-• Especializado em {tipo}";
+• Este estabelecimento está {(isActive ? "funcionando normalmente e disponível" : "temporariamente com restrições")} para check-ins
+• Localizado em {cidade}
+• Especializado em {tipo}
+• {(isActive ? "Você pode fazer check-in normalmente!" : $"Motivo: {motivoFechamento}")}
+• Para dúvidas, entre em contato: {telefone} / {email}";
         
         return await communicationPlugin.GenerateTemplatedResponse("PARTNER_INFO", nome ?? partnerId, infoParceiro);
     }
