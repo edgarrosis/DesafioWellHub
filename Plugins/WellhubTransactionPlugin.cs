@@ -56,7 +56,13 @@ public class WellhubTransactionPlugin
             }
 
             // Busca registro específico nos dados JSON
-            var checkinRecord = await _dataManager.FindCheckinRecordAsync(userId, partnerId, timestamp);
+            if (!DateTime.TryParse(timestamp, out var timestampDate))
+            {
+                var errorResult = new CheckinResult("ERRO", $"Formato de data inválido: {timestamp}. Use o formato yyyy-MM-ddTHH:mm:ss");
+                return JsonSerializer.Serialize(errorResult, JsonOptions);
+            }
+            
+            var checkinRecord = await _dataManager.FindCheckinRecordAsync(userId, partnerId, timestampDate);
             
             if (checkinRecord != null)
             {
