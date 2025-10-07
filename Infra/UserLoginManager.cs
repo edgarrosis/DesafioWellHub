@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.SemanticKernel;
+using SkOfflineCourse.Plugins;
 
 namespace SkOfflineCourse.Infra;
 
@@ -453,7 +454,7 @@ Exemplos:
                 ShowFavoriteLocations(user, userCheckins);
                 break;
             case "3":
-                ShowFailedCheckins(user, userCheckins);
+                Task.Run(async () => await ShowFailedCheckins(user, userCheckins)).Wait();
                 break;
             case "4":
                 ShowRechargeOptions(user);
@@ -569,7 +570,7 @@ Exemplos:
         ShowUserContextMenu(user, userCheckins);
     }
 
-    private void ShowFailedCheckins(JsonElement user, List<JsonElement> userCheckins)
+    private async Task ShowFailedCheckins(JsonElement user, List<JsonElement> userCheckins)
     {
         Console.Clear();
         Console.WriteLine("⚠️  CHECK-INS COM PROBLEMAS");
@@ -603,12 +604,57 @@ Exemplos:
                 Console.WriteLine();
             }
             
-            Console.WriteLine("💡 Dica: Entre em contato com o suporte para resolver essas questões.");
+            Console.WriteLine();
+            Console.WriteLine("� QUER CORRIGIR AGORA?");
+            Console.WriteLine("1. Sim, corrigir todos automaticamente");
+            Console.WriteLine("2. Não, apenas visualizar");
+            Console.WriteLine();
+            Console.Write("Escolha (1 ou 2): ");
+            
+            var choice = Console.ReadLine()?.Trim();
+            if (choice == "1")
+            {
+                await CorrectAllUserProblems(user.GetProperty("id").GetString() ?? "", user.GetProperty("name").GetString() ?? "");
+            }
         }
 
         Console.WriteLine("Pressione qualquer tecla para voltar...");
         Console.ReadKey();
-        ShowUserContextMenu(user, userCheckins);
+        
+        var userId = user.GetProperty("id").GetString();
+        var refreshedCheckins = GetCheckinRecords()
+            .Where(r => r.GetProperty("userId").GetString() == userId)
+            .ToList();
+        ShowUserContextMenu(user, refreshedCheckins);
+    }
+
+    private async Task CorrectAllUserProblems(string userId, string userName)
+    {
+        Console.Clear();
+        Console.WriteLine("🔧 CORRIGINDO TODOS OS PROBLEMAS");
+        Console.WriteLine();
+        Console.WriteLine($"Processando correções para {userName}...");
+        Console.WriteLine();
+
+        try
+        {
+            // Usar o WellhubCorrectionPlugin para corrigir
+            var correctionPlugin = new WellhubCorrectionPlugin(_kernel);
+            var result = await correctionPlugin.CorrectAllUserFailures(userId);
+            
+            Console.WriteLine("📋 RESULTADO DA CORREÇÃO:");
+            Console.WriteLine(result);
+            Console.WriteLine();
+            Console.WriteLine("✅ Processo concluído! Seus check-ins foram atualizados no sistema.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao processar correções: {ex.Message}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Pressione qualquer tecla para continuar...");
+        Console.ReadKey();
     }
 
     private void ShowRechargeOptions(JsonElement user)

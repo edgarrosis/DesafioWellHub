@@ -30,9 +30,16 @@ public class DataManager
         var json = await File.ReadAllTextAsync(filePath);
         var data = JsonSerializer.Deserialize<JsonElement>(json);
         
-        if (data.TryGetProperty("checkinRecords", out var records))
+        if (data.TryGetProperty("checkin_records", out var records))
         {
-            return JsonSerializer.Deserialize<List<dynamic>>(records.GetRawText()) ?? new List<dynamic>();
+            var recordsList = new List<dynamic>();
+            foreach (var record in records.EnumerateArray())
+            {
+                var recordDict = JsonSerializer.Deserialize<Dictionary<string, object>>(record.GetRawText());
+                if (recordDict != null)
+                    recordsList.Add(recordDict);
+            }
+            return recordsList;
         }
         
         return new List<dynamic>();
@@ -80,5 +87,119 @@ public class DataManager
     {
         var partners = await GetPartnersAsync();
         return partners.FirstOrDefault(p => p.id == partnerId);
+    }
+
+    public async Task<bool> UpdateCheckinRecordAsync(string recordId, JsonElement updatedRecord)
+    {
+        try
+        {
+            var filePath = Path.Combine(_dataPath, "checkin_records.json");
+            if (!File.Exists(filePath)) return false;
+
+            var json = await File.ReadAllTextAsync(filePath);
+            var data = JsonSerializer.Deserialize<JsonElement>(json);
+
+            if (data.TryGetProperty("checkin_records", out var records))
+            {
+                var recordsList = records.EnumerateArray().ToList();
+                var updatedList = new List<JsonElement>();
+
+                foreach (var record in recordsList)
+                {
+                    if (record.GetProperty("id").GetString() == recordId)
+                    {
+                        updatedList.Add(updatedRecord);
+                    }
+                    else
+                    {
+                        updatedList.Add(record);
+                    }
+                }
+
+                var newData = new { checkin_records = updatedList };
+                var updatedJson = JsonSerializer.Serialize(newData, new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+
+                await File.WriteAllTextAsync(filePath, updatedJson);
+                return true;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> UpdateCheckinRecordStatusAsync(string userId, string partnerId, DateTime timestamp, string newStatus, string newDetails)
+    {
+        try
+        {
+            var filePath = Path.Combine(_dataPath, "checkin_records.json");
+            if (!File.Exists(filePath)) return false;
+
+            var json = await File.ReadAllTextAsync(filePath);
+            var data = JsonSerializer.Deserialize<JsonElement>(json);
+
+            if (data.TryGetProperty("checkin_records", out var records))
+            {
+                var recordsList = records.EnumerateArray().ToList();
+                var updatedList = new List<object>();
+                bool recordUpdated = false;
+
+                foreach (var record in recordsList)
+                {
+                    var recordObj = JsonSerializer.Deserialize<Dictionary<string, object>>(record.GetRawText());
+                    
+                    if (recordObj != null && 
+                        recordObj.TryGetValue("userId", out var recUserId) && 
+                        recordObj.TryGetValue("partnerId", out var recPartnerId) && 
+                        recordObj.TryGetValue("timestamp", out var recTimestamp))
+                    {
+                        var recordUserId = recUserId?.ToString();
+                        var recordPartnerId = recPartnerId?.ToString();
+                        var recordTimestampStr = recTimestamp?.ToString();
+
+                        if (recordUserId == userId && 
+                            recordPartnerId == partnerId && 
+                            recordTimestampStr != null &&
+                            DateTime.TryParse(recordTimestampStr, out var recordDate) &&
+                            recordDate.Date == timestamp.Date)
+                        {
+                            // Atualizar este registro
+                            recordObj["status"] = newStatus;
+                            recordObj["details"] = newDetails;
+                            recordUpdated = true;
+                        }
+                    }
+
+                    if (recordObj != null)
+                        updatedList.Add(recordObj);
+                }
+
+                if (recordUpdated)
+                {
+                    var newData = new { checkin_records = updatedList };
+                    var updatedJson = JsonSerializer.Serialize(newData, new JsonSerializerOptions 
+                    { 
+                        WriteIndented = true,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
+
+                    await File.WriteAllTextAsync(filePath, updatedJson);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

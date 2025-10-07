@@ -362,6 +362,32 @@ async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin tra
             return $"❌ Erro ao processar correção: {ex.Message}";
         }
     }
+    else if (inputLower.Contains("estorno") || inputLower.Contains("estornar") || inputLower.Contains("refund"))
+    {
+        try
+        {
+            // Extrair ID da transação e motivo
+            var transactionId = ExtractTransactionId(input);
+            var reason = ExtractReason(input);
+
+            if (string.IsNullOrEmpty(transactionId))
+            {
+                return "💡 Para processar um estorno, preciso do ID da transação. Exemplo: 'Estornar transação txn_002 por falha no sistema'";
+            }
+
+            if (string.IsNullOrEmpty(reason))
+            {
+                reason = "Solicitação do usuário via sistema";
+            }
+
+            var result = await correctionPlugin.ProcessRefund(transactionId, reason);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return $"❌ Erro ao processar estorno: {ex.Message}";
+        }
+    }
     else if (inputLower.Contains("verifique") && inputLower.Contains("check"))
     {
         // Usar o AIIntentRouter para comandos de verificação complexos
@@ -807,6 +833,31 @@ string ExtractUserId(string input)
             return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
         }
     }
+    return "";
+}
+
+// Função auxiliar para extrair ID da transação
+string ExtractTransactionId(string input)
+{
+    var match = System.Text.RegularExpressions.Regex.Match(input, @"txn_\d+");
+    return match.Success ? match.Value : "";
+}
+
+// Função auxiliar para extrair motivo do estorno
+string ExtractReason(string input)
+{
+    // Procurar por "por", "motivo", "porque" e extrair o texto após
+    var patterns = new[] { @"por\s+(.+)", @"motivo\s+(.+)", @"porque\s+(.+)" };
+    
+    foreach(var pattern in patterns)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success && match.Groups.Count > 1)
+        {
+            return match.Groups[1].Value.Trim();
+        }
+    }
+    
     return "";
 }
 

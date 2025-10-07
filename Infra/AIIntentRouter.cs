@@ -47,7 +47,7 @@ public class AIIntentRouter
         {
             { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords", "GetUserInfo", "GetPartnerInfo" } },
             { "WellhubCommunication", new List<string> { "GenerateResolutionMessage", "GenerateTemplatedResponse", "AdjustMessageTone" } },
-            { "WellhubCorrection", new List<string> { "ReleaseCheckinLock", "CorrectCheckin", "ListSimulatedRecords" } }
+            { "WellhubCorrection", new List<string> { "ReleaseCheckinLock", "CorrectCheckin", "ProcessRefund", "ListFailedRecords" } }
         };
     }
 
