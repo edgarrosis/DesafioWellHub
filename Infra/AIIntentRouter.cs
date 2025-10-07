@@ -46,7 +46,8 @@ public class AIIntentRouter
         _pluginFunctions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
         {
             { "WellhubTransaction", new List<string> { "VerifyCheckinStatus", "ListSimulatedRecords", "GetUserInfo", "GetPartnerInfo" } },
-            { "WellhubCommunication", new List<string> { "GenerateResolutionMessage", "GenerateTemplatedResponse", "AdjustMessageTone" } }
+            { "WellhubCommunication", new List<string> { "GenerateResolutionMessage", "GenerateTemplatedResponse", "AdjustMessageTone" } },
+            { "WellhubCorrection", new List<string> { "ReleaseCheckinLock", "CorrectCheckin", "ListSimulatedRecords" } }
         };
     }
 

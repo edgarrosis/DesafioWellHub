@@ -36,10 +36,12 @@ var kernel = kernelBuilder.Build();
 // Cria plugins WellHub
 var wellhubTransaction = new WellhubTransactionPlugin();
 var wellhubCommunication = new WellhubCommunicationPlugin(kernel);
+var wellhubCorrection = new WellhubCorrectionPlugin(kernel);
 
 // Registrando plugins no Kernel
 kernel.ImportPluginFromObject(wellhubTransaction, "WellhubTransaction");
 kernel.ImportPluginFromObject(wellhubCommunication, "WellhubCommunication");
+kernel.ImportPluginFromObject(wellhubCorrection, "WellhubCorrection");
 
 // Router usando LLM
 var router = new AIIntentRouter(kernel);
@@ -75,6 +77,11 @@ Console.WriteLine("💬 Comunicação Humanizada:");
 Console.WriteLine("  • \"Gere uma resposta para cliente com problema de pagamento\"");
 Console.WriteLine("  • \"Resposta empática para falha de check-in\"");
 Console.WriteLine();
+Console.WriteLine("🔧 Correções de Check-in:");
+Console.WriteLine("  • \"Libere o check-in do usuário user123 para 2024-10-02\"");
+Console.WriteLine("  • \"Corrija o check-in do user456 em 2024-10-03\"");
+Console.WriteLine("  • \"Liste os registros de correção disponíveis\"");
+Console.WriteLine();
 Console.WriteLine("Digite 'sair' ou 'exit' para encerrar");
 Console.WriteLine("----------------------------------------");
 
@@ -90,7 +97,7 @@ while (true)
     try
     {
         // Analisar o input e gerar resposta integrada
-        var response = await ProcessUserRequest(input, wellhubTransaction, wellhubCommunication);
+        var response = await ProcessUserRequest(input, wellhubTransaction, wellhubCommunication, wellhubCorrection);
         Console.WriteLine();
         Console.WriteLine(response);
         Console.WriteLine();
@@ -104,7 +111,7 @@ while (true)
 Console.WriteLine("👋 Obrigado por usar o assistente WellHub!");
 
 // Função para processar requisições do usuário e integrar dados com respostas humanizadas
-async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin transactionPlugin, WellhubCommunicationPlugin communicationPlugin)
+async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin transactionPlugin, WellhubCommunicationPlugin communicationPlugin, WellhubCorrectionPlugin correctionPlugin)
 {
     var inputLower = input.ToLowerInvariant();
     
@@ -273,6 +280,42 @@ async Task<string> ProcessUserRequest(string input, WellhubTransactionPlugin tra
     else if (inputLower.Contains("parceiro") || inputLower.Contains("estabelecimento") || inputLower.Contains("academia") || inputLower.Contains("partner"))
     {
         return await GeneratePartnerInfo(input, transactionPlugin, communicationPlugin);
+    }
+    else if (inputLower.Contains("libere") || inputLower.Contains("corrija") || inputLower.Contains("corrigi") || 
+             (inputLower.Contains("check") && (inputLower.Contains("liberar") || inputLower.Contains("corrigir"))))
+    {
+        // Comandos de correção de check-in
+        var userId = ExtractUserId(input);
+        var date = ExtractDate(input);
+        
+        if (string.IsNullOrEmpty(userId))
+        {
+            return "💡 Para corrigir check-in, preciso do ID do usuário. Exemplo: 'Libere o check-in do usuário user123 para 2024-10-02'";
+        }
+        
+        if (string.IsNullOrEmpty(date))
+        {
+            return "💡 Para corrigir check-in, preciso da data. Exemplo: 'Corrija o check-in do user456 em 2024-10-03'";
+        }
+        
+        try
+        {
+            string result;
+            if (inputLower.Contains("libere") || inputLower.Contains("liberar"))
+            {
+                result = await correctionPlugin.ReleaseCheckinLock(userId, date);
+            }
+            else
+            {
+                result = await correctionPlugin.CorrectCheckin(userId, date);  
+            }
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return $"❌ Erro ao processar correção: {ex.Message}";
+        }
     }
     else if (inputLower.Contains("verifique") && inputLower.Contains("check"))
     {
@@ -701,6 +744,46 @@ string ExtractUserId(string input)
         if (match.Success)
         {
             return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+        }
+    }
+    return "";
+}
+
+// Função auxiliar para extrair data
+string ExtractDate(string input)
+{
+    var patterns = new[] { 
+        @"(\d{4}-\d{2}-\d{2})", 
+        @"(\d{2}/\d{2}/\d{4})", 
+        @"(\d{2}-\d{2}-\d{4})",
+        @"para\s+(\d{4}-\d{2}-\d{2})",
+        @"em\s+(\d{4}-\d{2}-\d{2})"
+    };
+    
+    foreach (var pattern in patterns)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var dateStr = match.Groups[1].Value;
+            // Converter para formato padrão YYYY-MM-DD se necessário
+            if (dateStr.Contains("/"))
+            {
+                var parts = dateStr.Split('/');
+                if (parts.Length == 3)
+                    return $"{parts[2]}-{parts[1]:D2}-{parts[0]:D2}";
+            }
+            else if (dateStr.Contains("-") && dateStr.Length == 10 && dateStr.StartsWith("20"))
+            {
+                return dateStr; // Já está no formato correto
+            }
+            else if (dateStr.Contains("-") && dateStr.Length == 10)
+            {
+                var parts = dateStr.Split('-');
+                if (parts.Length == 3)
+                    return $"{parts[2]}-{parts[1]:D2}-{parts[0]:D2}";
+            }
+            return dateStr;
         }
     }
     return "";

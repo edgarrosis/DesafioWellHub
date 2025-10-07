@@ -8,9 +8,17 @@ public class WellhubCorrectionPlugin
 {
     // Simulação de dados para diferentes cenários de liberação de check-in
     private readonly Dictionary<string, CorrectionResult> _simulatedData;
-
-    public WellhubCorrectionPlugin()
+    private readonly Kernel? _kernel;
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    public WellhubCorrectionPlugin(Kernel? kernel = null)
+    {
+        _kernel = kernel;
         // Inicializa dados simulados para testes
         _simulatedData = new Dictionary<string, CorrectionResult>
         {
@@ -55,15 +63,21 @@ public class WellhubCorrectionPlugin
             result = new CorrectionResult("ERRO_OPERACIONAL", "Falha ao liberar check-in: registro não encontrado.");
         }
 
-        // Serializa em JSON estruturado
-        var jsonOptions = new JsonSerializerOptions
+        // Gera resposta humanizada se o kernel estiver disponível
+        if (_kernel != null)
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default
-        };
+            try
+            {
+                var humanizedResponse = await GenerateHumanizedCorrectionResponse(result, userId, date);
+                return humanizedResponse;
+            }
+            catch
+            {
+                // Se falhar, retorna JSON estruturado como fallback
+            }
+        }
 
-        return JsonSerializer.Serialize(result, jsonOptions);
+        return JsonSerializer.Serialize(result, JsonOptions);
     }
 
     /// <summary>
@@ -125,6 +139,37 @@ public class WellhubCorrectionPlugin
         };
 
         return JsonSerializer.Serialize(result, jsonOptions);
+    }
+
+    /// <summary>
+    /// Gera resposta humanizada para correções usando o WellhubCommunicationPlugin
+    /// </summary>
+    private async Task<string> GenerateHumanizedCorrectionResponse(CorrectionResult result, string userId, string date)
+    {
+        if (_kernel == null) return JsonSerializer.Serialize(result, JsonOptions);
+
+        try
+        {
+            var context = result.Status == "SUCESSO_DA_CORRECAO" 
+                ? $"O usuário {userId} teve seu check-in da data {date} corrigido com sucesso. {result.Detalhes}"
+                : $"Falha ao corrigir o check-in do usuário {userId} para a data {date}. {result.Detalhes}";
+
+            var tone = result.Status == "SUCESSO_DA_CORRECAO" ? "positivo e comemorativo" : "empático e solucionador";
+
+            var kernelArgs = new KernelArguments
+            {
+                ["situacao"] = context,
+                ["tom"] = tone,
+                ["incluir_emojis"] = "true"
+            };
+
+            var response = await _kernel.InvokeAsync("WellhubCommunication", "GenerateTemplatedResponse", kernelArgs);
+            return response.GetValue<string>() ?? JsonSerializer.Serialize(result, JsonOptions);
+        }
+        catch
+        {
+            return JsonSerializer.Serialize(result, JsonOptions);
+        }
     }
 }
 
