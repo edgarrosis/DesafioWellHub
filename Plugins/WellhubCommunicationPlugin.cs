@@ -117,11 +117,13 @@ Se ACCOUNT_SUMMARY (resumo da conta):
 - Tom motivacional e positivo
 
 Se CHECKIN_HISTORY (histórico de check-ins):
-- Parabenize a dedicação se houver check-ins
-- Liste estabelecimentos específicos visitados
-- Mencione valores gastos e datas reais
-- Se não houver check-ins, seja acolhedor e ofereça sugestões
-- Tom encorajador
+- Comece parabenizando o cliente pelo engajamento
+- Apresente um resumo visual dos registros (total, sucessos, falhas)
+- Destaque estabelecimentos visitados COM SUCESSO
+- Mencione problemas encontrados de forma construtiva
+- Ofereça dicas para resolver falhas recorrentes
+- Liste estatísticas motivacionais (economia, variedade de locais)
+- Tom encorajador e informativo
 
 Se FAILURE_ANALYSIS (análise de falhas):
 - Reconheça os problemas de forma empática
