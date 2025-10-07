@@ -1,0 +1,101 @@
+{
+  "partners": [
+    {
+      "id": "partner456",
+      "name": "Academia FitLife Centro",
+      "type": "ACADEMIA",
+      "city": "São Paulo",
+      "address": "Rua Augusta, 123",
+      "phone": "(11) 3456-7890",
+      "email": "contato@fitlife.com.br",
+      "operating_hours": {
+        "monday_friday": "06:00-22:00",
+        "saturday": "08:00-18:00",
+        "sunday": "08:00-16:00"
+      },
+      "services": ["Musculação", "Cardio", "Personal Trainer"],
+      "active": true
+    },
+    {
+      "id": "partner789",
+      "name": "Smart Fit Vila Olímpia",
+      "type": "ACADEMIA",
+      "city": "São Paulo",
+      "address": "Av. Paulista, 456",
+      "phone": "(11) 2345-6789",
+      "email": "villaolimpia@smartfit.com.br",
+      "operating_hours": {
+        "monday_friday": "05:00-23:00",
+        "saturday": "07:00-20:00",
+        "sunday": "09:00-18:00"
+      },
+      "services": ["Musculação", "Cardio", "Aulas Coletivas"],
+      "active": true
+    },
+    {
+      "id": "partner123",
+      "name": "Bio Ritmo Moema",
+      "type": "ACADEMIA",
+      "city": "São Paulo",
+      "address": "Av. Moreira Guimarães, 789",
+      "phone": "(11) 4567-8901",
+      "email": "moema@bioritmo.com.br",
+      "operating_hours": {
+        "monday_friday": "06:00-22:00",
+        "saturday": "08:00-18:00",
+        "sunday": "FECHADO"
+      },
+      "services": ["Musculação", "Natação", "Pilates"],
+      "active": false,
+      "closure_reason": "Reforma temporária"
+    },
+    {
+      "id": "partner888",
+      "name": "Runner Academia",
+      "type": "ACADEMIA",
+      "city": "Rio de Janeiro",
+      "address": "Rua Copacabana, 321",
+      "phone": "(21) 3456-7890",
+      "email": "contato@runner.com.br",
+      "operating_hours": {
+        "monday_friday": "05:30-23:00",
+        "saturday": "07:00-19:00",
+        "sunday": "08:00-17:00"
+      },
+      "services": ["Corrida", "Musculação", "Funcional"],
+      "active": true
+    },
+    {
+      "id": "partner222",
+      "name": "CrossFit Champions",
+      "type": "CROSSFIT",
+      "city": "Belo Horizonte",
+      "address": "Rua da Bahia, 654",
+      "phone": "(31) 2345-6789",
+      "email": "champions@crossfit.com.br",
+      "operating_hours": {
+        "monday_friday": "06:00-21:00",
+        "saturday": "08:00-16:00",
+        "sunday": "09:00-15:00"
+      },
+      "services": ["CrossFit", "Functional Training", "Coaching"],
+      "active": true
+    },
+    {
+      "id": "partner333",
+      "name": "Yoga Studio Zen",
+      "type": "YOGA",
+      "city": "Curitiba",
+      "address": "Rua XV de Novembro, 987",
+      "phone": "(41) 3456-7890",
+      "email": "zen@yogastudio.com.br",
+      "operating_hours": {
+        "monday_friday": "07:00-20:00",
+        "saturday": "08:00-17:00",
+        "sunday": "09:00-16:00"
+      },
+      "services": ["Hatha Yoga", "Vinyasa", "Meditação"],
+      "active": true
+    }
+  ]
+}

@@ -2,7 +2,6 @@ bin/
 obj/
 **/bin/
 **/obj/
-data/*.json
 *.user
 *.suo
 *.userosscache
@@ -58,3 +57,9 @@ TestResults/
 publish/
 node_modules/
 wwwroot/lib/
+
+# Exceções para arquivos essenciais da pasta data
+!data/checkin_records.json
+!data/partners.json  
+!data/users.json
+!data/checkin_records_test.json
