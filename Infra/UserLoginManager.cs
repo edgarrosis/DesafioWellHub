@@ -84,7 +84,7 @@ public class UserLoginManager
         }
     }
 
-    public void ShowLoginScreen()
+    public async Task ShowLoginScreen()
     {
         Console.Clear();
         Console.WriteLine("=== WELLHUB - SISTEMA DE CHECK-IN ===");
@@ -135,7 +135,7 @@ public class UserLoginManager
             if (choice > 0 && choice <= users.Count)
             {
                 var selectedUser = users[choice - 1];
-                LoginAsUser(selectedUser);
+                await LoginAsUser(selectedUser);
             }
             else
             {
@@ -150,13 +150,13 @@ public class UserLoginManager
             var filteredUsers = SearchUsersByName(users, input);
             if (filteredUsers.Any())
             {
-                ShowSearchResults(filteredUsers);
+                await ShowSearchResults(filteredUsers);
             }
             else
             {
                 Console.WriteLine($"❌ Nenhum usuário encontrado com o termo '{input}'. Pressione qualquer tecla para tentar novamente...");
                 Console.ReadKey();
-                ShowLoginScreen();
+                await ShowLoginScreen();
             }
         }
     }
@@ -172,7 +172,7 @@ public class UserLoginManager
         }).ToList();
     }
 
-    private void ShowSearchResults(List<JsonElement> filteredUsers)
+    private async Task ShowSearchResults(List<JsonElement> filteredUsers)
     {
         Console.Clear();
         Console.WriteLine("=== RESULTADOS DA BUSCA ===");
@@ -206,22 +206,22 @@ public class UserLoginManager
             if (choice > 0 && choice <= filteredUsers.Count)
             {
                 var selectedUser = filteredUsers[choice - 1];
-                LoginAsUser(selectedUser);
+                await LoginAsUser(selectedUser);
             }
             else
             {
                 Console.WriteLine("❌ Opção inválida. Pressione qualquer tecla para tentar novamente...");
                 Console.ReadKey();
-                ShowSearchResults(filteredUsers);
+                await ShowSearchResults(filteredUsers);
             }
         }
         else
         {
-            ShowSearchResults(filteredUsers);
+            await ShowSearchResults(filteredUsers);
         }
     }
 
-    private void LoginAsUser(JsonElement user)
+    private async Task LoginAsUser(JsonElement user)
     {
         var userId = user.GetProperty("id").GetString();
         var userName = user.GetProperty("name").GetString();
@@ -240,6 +240,9 @@ public class UserLoginManager
         var userCheckins = GetCheckinRecords()
             .Where(record => record.GetProperty("userId").GetString() == userId)
             .ToList();
+
+        // Mensagem humanizada de boas-vindas
+        await GenerateWelcomeMessage(user, userCheckins);
 
         ShowUserContextMenu(user, userCheckins);
     }
@@ -587,6 +590,9 @@ Exemplos:
         }
         else
         {
+            // Mensagem motivacional sobre resolução de problemas
+            await GenerateCheckInProblemMessage();
+            
             Console.WriteLine($"Encontrei {failed.Count} transação(ões) que precisam de atenção:");
             Console.WriteLine();
             
@@ -828,5 +834,136 @@ Exemplos:
             "BASIC" => "📋 BASIC",
             _ => "❓ " + plan
         };
+    }
+
+    private async Task GenerateWelcomeMessage(JsonElement user, List<JsonElement> userCheckins)
+    {
+        try
+        {
+            var userName = user.GetProperty("name").GetString();
+            var userPlan = user.GetProperty("plan").GetString();
+            var userBalance = user.GetProperty("credit_balance").GetDouble();
+            
+            // Análise detalhada dos problemas na conta
+            var problemsCount = userCheckins.Count(c => c.GetProperty("status").GetString() != "SUCESSO");
+            var problemTypes = userCheckins
+                .Where(c => c.GetProperty("status").GetString() != "SUCESSO")
+                .Select(c => c.GetProperty("status").GetString())
+                .Distinct()
+                .ToList();
+            
+            var lastActivity = userCheckins.Any() 
+                ? userCheckins.OrderByDescending(c => c.GetProperty("timestamp").GetString()).First()
+                : (JsonElement?)null;
+            
+            var lastStatus = lastActivity?.GetProperty("status").GetString();
+            var lastPartner = lastActivity?.GetProperty("partner_name").GetString();
+            
+            // Detectar situações específicas da conta
+            var accountIssues = new List<string>();
+            if (userBalance < 25) accountIssues.Add("saldo baixo");
+            if (problemTypes.Contains("FALHA_SALDO")) accountIssues.Add("falhas por saldo insuficiente");
+            if (problemTypes.Contains("FALHA_LOCALIZACAO")) accountIssues.Add("problemas de localização");
+            if (problemTypes.Contains("FALHA_PARTNER")) accountIssues.Add("problemas com parceiros");
+
+            var prompt = $@"
+Você é um assistente virtual especializado do WellHub. Crie uma mensagem personalizada e inteligente para {userName}.
+
+PERFIL COMPLETO:
+- Nome: {userName}
+- Plano: {userPlan}
+- Saldo: R$ {userBalance:F2}
+- Total de check-ins: {userCheckins.Count}
+- Check-ins com problemas: {problemsCount}
+- Última atividade: {(lastActivity != null ? $"{lastPartner} ({lastStatus})" : "Nenhuma")}
+
+PROBLEMAS DETECTADOS:
+{(accountIssues.Any() ? string.Join(", ", accountIssues) : "Nenhum problema detectado")}
+
+TIPOS DE ERRO: {(problemTypes.Any() ? string.Join(", ", problemTypes) : "Nenhum")}
+
+INSTRUÇÕES:
+- Seja caloroso, mas focado nos problemas reais da conta
+- Máximo 2 frases
+- Se há problemas específicos, mencione como resolver
+- Se saldo baixo, sugira recarga
+- Se última atividade foi erro, ofereça ajuda específica
+- Use emojis relevantes
+- Seja proativo e útil
+
+Responda apenas com a mensagem personalizada:";
+
+            var response = await _kernel.InvokePromptAsync(prompt);
+            var message = response.GetValue<string>()?.Trim();
+
+            if (!string.IsNullOrEmpty(message))
+            {
+                Console.WriteLine($"🤖 {message}");
+                Console.WriteLine();
+                Console.WriteLine("Pressione qualquer tecla para continuar...");
+                Console.ReadKey();
+                Console.Clear();
+            }
+        }
+        catch
+        {
+            // Fallback mais informativo se Gemini não estiver disponível
+            var userName = user.GetProperty("name").GetString();
+            var problemsCount = userCheckins.Count(c => c.GetProperty("status").GetString() != "SUCESSO");
+            var userBalance = user.GetProperty("credit_balance").GetDouble();
+            
+            Console.WriteLine($"🤖 Olá, {userName}! 👋");
+            if (problemsCount > 0)
+            {
+                Console.WriteLine($"Detectei {problemsCount} check-in(s) com problemas - vamos resolver juntos! 🔧");
+            }
+            else if (userBalance < 25)
+            {
+                Console.WriteLine("Seu saldo está baixo, que tal fazer uma recarga? 💰");
+            }
+            else
+            {
+                Console.WriteLine("Tudo certo com sua conta! Pronto para mais atividades? 💪");
+            }
+            Console.WriteLine();
+            Console.WriteLine("Pressione qualquer tecla para continuar...");
+            Console.ReadKey();
+            Console.Clear();
+        }
+    }
+
+    private async Task GenerateCheckInProblemMessage()
+    {
+        try
+        {
+            var prompt = @"
+Você é um assistente do WellHub. Crie uma mensagem curta e motivacional sobre resolver problemas de check-in.
+
+INSTRUÇÕES:
+- Seja encorajador e positivo
+- Máximo 1-2 frases
+- Mencione que problemas podem ser facilmente resolvidos
+- Use emoji apropriado
+
+Responda apenas com a mensagem:";
+
+            var response = await _kernel.InvokePromptAsync(prompt);
+            var message = response.GetValue<string>()?.Trim();
+
+            if (!string.IsNullOrEmpty(message))
+            {
+                Console.WriteLine($"💡 {message}");
+                Console.WriteLine();
+                Console.WriteLine("Pressione qualquer tecla para continuar...");
+                Console.ReadKey();
+            }
+        }
+        catch
+        {
+            Console.WriteLine("💡 Não se preocupe! Vamos resolver esses problemas de check-in rapidamente. 😊");
+            Console.WriteLine();
+            Console.WriteLine("Pressione qualquer tecla para continuar...");
+            Console.ReadKey();
+        }
     }
 }
