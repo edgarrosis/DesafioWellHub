@@ -671,6 +671,12 @@ Exemplos:
                 var recordId = problemRecord.GetProperty("id").GetString();
                 var currentStatus = problemRecord.GetProperty("status").GetString();
                 
+                if (string.IsNullOrEmpty(recordId) || string.IsNullOrEmpty(currentStatus))
+                {
+                    Console.WriteLine("⚠️ Registro com dados inválidos ignorado.");
+                    continue;
+                }
+                
                 Console.WriteLine($"🔧 Corrigindo check-in {recordId} (Status: {currentStatus})...");
                 await Task.Delay(300);
 
@@ -770,12 +776,12 @@ Exemplos:
             if (!allRecords.TryGetProperty("checkin_records", out var recordsArray))
                 return false;
 
-            var recordsList = new List<Dictionary<string, object>>();
+            var recordsList = new List<Dictionary<string, object?>>();
             bool updated = false;
 
             foreach (var record in recordsArray.EnumerateArray())
             {
-                var recordDict = new Dictionary<string, object>();
+                var recordDict = new Dictionary<string, object?>();
                 
                 // Copiar todas as propriedades do registro atual
                 foreach (var property in record.EnumerateObject())
@@ -807,7 +813,7 @@ Exemplos:
             if (updated)
             {
                 // Recrear o JsonElement com os dados atualizados
-                var rootDict = new Dictionary<string, object>
+                var rootDict = new Dictionary<string, object?>
                 {
                     ["checkin_records"] = recordsList
                 };
@@ -827,12 +833,12 @@ Exemplos:
 
 
 
-    private object JsonElementToObject(JsonElement element)
+    private object? JsonElementToObject(JsonElement element)
     {
         switch (element.ValueKind)
         {
             case JsonValueKind.String:
-                return element.GetString();
+                return element.GetString() ?? string.Empty;
             case JsonValueKind.Number:
                 return element.TryGetInt32(out var intVal) ? intVal : element.GetDouble();
             case JsonValueKind.True:
@@ -841,7 +847,7 @@ Exemplos:
             case JsonValueKind.Array:
                 return element.EnumerateArray().Select(JsonElementToObject).ToArray();
             case JsonValueKind.Object:
-                var dict = new Dictionary<string, object>();
+                var dict = new Dictionary<string, object?>();
                 foreach (var property in element.EnumerateObject())
                 {
                     dict[property.Name] = JsonElementToObject(property.Value);

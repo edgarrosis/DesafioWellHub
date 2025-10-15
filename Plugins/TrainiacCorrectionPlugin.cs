@@ -156,6 +156,9 @@ public class TrainiacCorrectionPlugin
         [Description("ID do usuario para recuperar dados")] string userId)
     {
         Console.WriteLine($"💾 Recuperando dados perdidos de treino para {userId}...");
+        
+        // Simular processamento assíncrono
+        await Task.Delay(100);
 
         if (_sessionCache.TryGetValue(userId, out var cachedData))
         {
@@ -428,6 +431,9 @@ public class TrainiacCorrectionPlugin
 
     private async Task PreserveSessionData(string userId, string sessionData)
     {
+        // Simular operação assíncrona de preservação
+        await Task.Delay(50);
+        
         try
         {
             var jsonDoc = JsonDocument.Parse(sessionData);
