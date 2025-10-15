@@ -644,14 +644,9 @@ Exemplos:
 
         try
         {
-            // Usar o WellhubCorrectionPlugin para corrigir
-            var correctionPlugin = new WellhubCorrectionPlugin(_kernel);
-            var result = await correctionPlugin.CorrectAllUserFailures(userId);
-            
-            Console.WriteLine("📋 RESULTADO DA CORREÇÃO:");
-            Console.WriteLine(result);
-            Console.WriteLine();
-            Console.WriteLine("✅ Processo concluído! Seus check-ins foram atualizados no sistema.");
+            // Sistema de correção não implementado
+            Console.WriteLine("⚠️ Sistema de correção automática não disponível.");
+            Console.WriteLine("💡 Use as opções manuais do menu para fazer ajustes.");
         }
         catch (Exception ex)
         {

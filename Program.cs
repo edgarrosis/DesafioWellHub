@@ -2,6 +2,7 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.Google;
 using SkOfflineCourse.Infra;
 using SkOfflineCourse.TestPrograms;
+using SkOfflineCourse.Plugins;
 using System.Text;
 using DotNetEnv;
 
@@ -105,3 +106,4 @@ async Task RunTrainiacSystem()
     var trainiacTest = new TrainiacSystemTest();
     await trainiacTest.RunTestsAsync();
 }
+

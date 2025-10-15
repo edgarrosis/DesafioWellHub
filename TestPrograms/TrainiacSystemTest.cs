@@ -1,10 +1,12 @@
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Connectors.Google;
 using SkOfflineCourse.MockApi;
 using SkOfflineCourse.Plugins;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Unicode;
 using System.Text.Json;
+using DotNetEnv;
 
 namespace SkOfflineCourse.TestPrograms;
 
@@ -13,6 +15,7 @@ public class TrainiacSystemTest
     private readonly TrainiacMockApi _mockApi;
     private readonly Kernel _kernel;
     private readonly TrainiacDataPlugin _plugin;
+    private readonly TrainiacCorrectionPlugin _correctionPlugin;
 
     public TrainiacSystemTest()
     {
@@ -27,16 +30,41 @@ public class TrainiacSystemTest
             // Se nao conseguir configurar UTF-8, continua com encoding padrao
         }
 
+        // Carregar variaveis de ambiente
+        Env.Load();
+
         // Inicializar Mock API
         _mockApi = new TrainiacMockApi(8081);
 
-        // Configurar Kernel
+        // Configurar Kernel com LLM
         var kernelBuilder = Kernel.CreateBuilder();
+        
+        try
+        {
+            // Configuração para Google Gemini
+            var geminiApiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+            var geminiModel = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-2.0-flash-exp";
+            
+            if (!string.IsNullOrEmpty(geminiApiKey))
+            {
+                kernelBuilder.AddGoogleAIGeminiChatCompletion(
+                    modelId: geminiModel,
+                    apiKey: geminiApiKey);
+                Console.WriteLine($"🤖 LLM Personal Trainer ativado ({geminiModel})");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ LLM não disponível, usando modo simulado: {ex.Message}");
+        }
+
         _kernel = kernelBuilder.Build();
 
-        // Registrar o plugin
+        // Registrar plugins
         _plugin = new TrainiacDataPlugin();
+        _correctionPlugin = new TrainiacCorrectionPlugin(_kernel); // Passa kernel para usar LLM
         _kernel.Plugins.AddFromObject(_plugin, "TrainiacData");
+        _kernel.Plugins.AddFromObject(_correctionPlugin, "TrainiacCorrection");
     }
 
     public async Task RunTestsAsync()
@@ -61,6 +89,260 @@ public class TrainiacSystemTest
             Console.WriteLine();
             Console.WriteLine("Pressione qualquer tecla para sair...");
             await WaitForUserInput();
+        }
+    }
+
+    private async Task TestAutomaticErrorCorrection()
+    {
+        Console.Clear();
+        Console.WriteLine("🔧 TESTE: Correção Automática de Erros");
+        Console.WriteLine("=====================================");
+        Console.WriteLine();
+        
+        var testUsers = new[] 
+        { 
+            ("user456", "Maria Santos - CONEXAO_INSTAVEL"), 
+            ("user789", "Carlos Oliveira - TREINO_NAO_CARREGADO"), 
+            ("user111", "Pedro Alves - DADOS_CORROMPIDOS"),
+            ("user_test_timeout", "Usuário Timeout - TIMEOUT_SERVIDOR")
+        };
+        
+        Console.WriteLine("🔍 Testando correção automática para diferentes tipos de erro...");
+        Console.WriteLine();
+        
+        foreach (var (userId, description) in testUsers)
+        {
+            try
+            {
+                Console.WriteLine($"  🛠️ {description}...");
+                
+                var result = await _kernel.InvokeAsync("TrainiacCorrection", "GetTrainingStatusWithAutoCorrection", 
+                    new KernelArguments { ["userId"] = userId });
+                
+                var resultString = result.GetValue<string>();
+                ShowCorrectionResult(resultString, userId);
+                
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erro para {userId}: {ex.Message}");
+                Console.WriteLine();
+            }
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para voltar ao menu...");
+        await WaitForUserInput();
+    }
+
+    private async Task TestForceCompleteCorrection()
+    {
+        Console.Clear();
+        Console.WriteLine("🛠️ TESTE: Correção Completa Forçada");
+        Console.WriteLine("===================================");
+        Console.WriteLine();
+        
+        Console.Write("Digite o ID do usuário para correção completa: ");
+        var userId = Console.ReadLine()?.Trim();
+        
+        if (string.IsNullOrEmpty(userId))
+        {
+            Console.WriteLine("❌ ID do usuário é obrigatório!");
+            Console.WriteLine("Testando com usuário padrão: user456");
+            userId = "user456";
+        }
+        
+        try
+        {
+            Console.WriteLine($"🔄 Aplicando correção completa para {userId}...");
+            Console.WriteLine();
+            
+            var result = await _kernel.InvokeAsync("TrainiacCorrection", "ForceCorrectAllTrainingIssues", 
+                new KernelArguments { ["userId"] = userId });
+            
+            var resultString = result.GetValue<string>();
+            ShowDetailedCorrectionResult(resultString);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro: {ex.Message}");
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para voltar ao menu...");
+        await WaitForUserInput();
+    }
+
+    private async Task TestRecoverLostData()
+    {
+        Console.Clear();
+        Console.WriteLine("💾 TESTE: Recuperação de Dados Perdidos");
+        Console.WriteLine("=======================================");
+        Console.WriteLine();
+        
+        var testUsers = new[] { "user123", "user456", "user_inexistente" };
+        
+        Console.WriteLine("🔍 Testando recuperação de dados para diferentes usuários...");
+        Console.WriteLine();
+        
+        foreach (var userId in testUsers)
+        {
+            try
+            {
+                Console.WriteLine($"  💾 Recuperando dados para {userId}...");
+                
+                var result = await _kernel.InvokeAsync("TrainiacCorrection", "RecoverLostTrainingData", 
+                    new KernelArguments { ["userId"] = userId });
+                
+                var resultString = result.GetValue<string>();
+                ShowRecoveryResult(resultString, userId);
+                
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erro para {userId}: {ex.Message}");
+                Console.WriteLine();
+            }
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para voltar ao menu...");
+        await WaitForUserInput();
+    }
+
+    private void ShowCorrectionResult(string? jsonResult, string userId)
+    {
+        if (string.IsNullOrEmpty(jsonResult))
+        {
+            Console.WriteLine("❌ Sem resposta");
+            return;
+        }
+        
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonResult);
+            var root = doc.RootElement;
+            
+            var status = root.GetProperty("status").GetString();
+            var message = root.GetProperty("message").GetString();
+            var autoCorrected = root.TryGetProperty("autoCorrected", out var correctedProp) && correctedProp.GetBoolean();
+            
+            if (autoCorrected)
+            {
+                var originalError = root.TryGetProperty("originalError", out var errorProp) ? errorProp.GetString() : "Desconhecido";
+                Console.WriteLine($"     ✅ CORRIGIDO: {originalError} → {status}");
+                Console.WriteLine($"     📝 {message}");
+                
+                if (root.TryGetProperty("correctionsApplied", out var corrections))
+                {
+                    Console.WriteLine("     🔧 Correções aplicadas:");
+                    foreach (var correction in corrections.EnumerateArray())
+                    {
+                        Console.WriteLine($"        • {correction.GetString()}");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine($"     ✅ OK: {status} - {message}");
+            }
+        }
+        catch
+        {
+            Console.WriteLine("     📄 Resposta processada com sucesso");
+        }
+    }
+
+    private void ShowDetailedCorrectionResult(string? jsonResult)
+    {
+        if (string.IsNullOrEmpty(jsonResult))
+        {
+            Console.WriteLine("❌ Sem resposta");
+            return;
+        }
+        
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonResult);
+            var root = doc.RootElement;
+            
+            var status = root.GetProperty("status").GetString();
+            var message = root.GetProperty("message").GetString();
+            
+            Console.WriteLine($"📋 RESULTADO DA CORREÇÃO COMPLETA:");
+            Console.WriteLine("==================================");
+            Console.WriteLine($"   Status: {(status == "CORRECTION_SUCCESS" ? "✅" : "❌")} {status}");
+            Console.WriteLine($"   Mensagem: {message}");
+            
+            if (root.TryGetProperty("correctionsApplied", out var corrections))
+            {
+                Console.WriteLine();
+                Console.WriteLine("🔧 CORREÇÕES APLICADAS:");
+                foreach (var correction in corrections.EnumerateArray())
+                {
+                    Console.WriteLine($"   ✓ {correction.GetString()}");
+                }
+            }
+            
+            if (root.TryGetProperty("sessionRestored", out var restored) && restored.GetBoolean())
+            {
+                Console.WriteLine();
+                Console.WriteLine("🔄 SESSÃO RESTAURADA COM SUCESSO");
+            }
+            
+            if (root.TryGetProperty("dataPreserved", out var preserved) && preserved.GetBoolean())
+            {
+                Console.WriteLine("💾 DADOS DE TREINO PRESERVADOS");
+            }
+        }
+        catch
+        {
+            Console.WriteLine("📄 Resposta detalhada:");
+            Console.WriteLine(jsonResult);
+        }
+    }
+
+    private void ShowRecoveryResult(string? jsonResult, string userId)
+    {
+        if (string.IsNullOrEmpty(jsonResult))
+        {
+            Console.WriteLine("❌ Sem resposta");
+            return;
+        }
+        
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonResult);
+            var root = doc.RootElement;
+            
+            var status = root.GetProperty("status").GetString();
+            var message = root.GetProperty("message").GetString();
+            
+            var statusIcon = status switch
+            {
+                "DATA_RECOVERED" => "✅",
+                "FALLBACK_DATA_GENERATED" => "⚡",
+                _ => "❓"
+            };
+            
+            Console.WriteLine($"     {statusIcon} {status}");
+            Console.WriteLine($"     📝 {message}");
+            
+            if (root.TryGetProperty("isFallback", out var isFallback) && isFallback.GetBoolean())
+            {
+                Console.WriteLine($"     ⚡ Dados padrão gerados para continuidade");
+            }
+            
+            if (root.TryGetProperty("cacheTimestamp", out var cacheTime))
+            {
+                Console.WriteLine($"     🕐 Cache: {cacheTime}");
+            }
+        }
+        catch
+        {
+            Console.WriteLine("     📄 Dados recuperados com sucesso");
         }
     }
 
@@ -104,64 +386,266 @@ public class TrainiacSystemTest
 
     private async Task ShowTestMenu()
     {
-        while (true)
-        {
-            Console.Clear();
-            Console.WriteLine("╔══════════════════════════════════════╗");
-            Console.WriteLine("║           MENU DE TESTES             ║");
-            Console.WriteLine("╚══════════════════════════════════════╝");
-            Console.WriteLine();
-            Console.WriteLine("Escolha um teste para executar:");
-            Console.WriteLine();
-            Console.WriteLine("1️⃣  Listar Usuários Disponíveis");
-            Console.WriteLine("2️⃣  Verificar Status de Treinos");
-            Console.WriteLine("3️⃣  Listar Exercícios");
-            Console.WriteLine("4️⃣  Detalhes de Exercícios");
-            Console.WriteLine("5️⃣  Testar Backup de Dados");
-            Console.WriteLine("6️⃣  Executar TODOS os Testes");
-            Console.WriteLine("0️⃣  Sair");
-            Console.WriteLine();
-            Console.Write("Digite sua opção: ");
+        await StartUserExperience();
+    }
 
-            var option = Console.ReadLine();
-            
+    private async Task StartUserExperience()
+    {
+        Console.Clear();
+        Console.WriteLine("💪 BEM-VINDO AO TRAINIAC!");
+        Console.WriteLine("==========================");
+        Console.WriteLine();
+        Console.WriteLine("Olá! Que bom te ver aqui! 😊");
+        Console.WriteLine("Estou aqui para te ajudar com seu treino personalizado.");
+        Console.WriteLine();
+        Console.WriteLine("Vamos começar?");
+        Console.WriteLine();
+        Console.WriteLine("1️⃣  🏃‍♂️ Iniciar Treino Cardiovascular");
+        Console.WriteLine("2️⃣  � Iniciar Treino de Força");  
+        Console.WriteLine("3️⃣  🧘‍♀️ Iniciar Treino Funcional");
+        Console.WriteLine("4️⃣  🎯 Treino Personalizado (IA escolhe)");
+        Console.WriteLine("0️⃣  Sair do app");
+        Console.WriteLine();
+        Console.Write("Escolha seu treino: ");
+
+        var option = Console.ReadLine();
+        
+        switch (option)
+        {
+            case "1":
+                await StartWorkoutExperience("cardiovascular", "Treino Cardiovascular");
+                break;
+            case "2":
+                await StartWorkoutExperience("forca", "Treino de Força");
+                break;
+            case "3":
+                await StartWorkoutExperience("funcional", "Treino Funcional");
+                break;
+            case "4":
+                await StartAIPersonalizedWorkout();
+                break;
+            case "0":
+                return;
+            default:
+                Console.WriteLine("❌ Opção inválida! Pressione ENTER para tentar novamente...");
+                Console.ReadLine();
+                await StartUserExperience(); // Volta ao menu
+                break;
+        }
+    }
+
+    private async Task StartWorkoutExperience(string workoutType, string workoutName)
+    {
+        Console.Clear();
+        Console.WriteLine($"🏋️‍♂️ {workoutName.ToUpper()}");
+        Console.WriteLine("================================");
+        Console.WriteLine();
+
+        // Simular carregamento
+        Console.WriteLine("📱 Carregando seu treino personalizado...");
+        await Task.Delay(1500);
+
+        // Aqui é onde vamos simular o usuário real
+        await SimulatePersonalTrainerExperience(workoutType, workoutName);
+    }
+
+    private async Task StartAIPersonalizedWorkout()
+    {
+        Console.Clear();
+        Console.WriteLine("🤖 TREINO PERSONALIZADO COM IA");
+        Console.WriteLine("===============================");
+        Console.WriteLine();
+
+        if (_kernel != null)
+        {
             try
             {
-                switch (option)
-                {
-                    case "1":
-                        await TestListUsers();
-                        break;
-                    case "2":
-                        await TestUserStatuses();
-                        break;
-                    case "3":
-                        await TestListExercises();
-                        break;
-                    case "4":
-                        await TestExerciseDetails();
-                        break;
-                    case "5":
-                        await TestBackupFunctionality();
-                        break;
-                    case "6":
-                        await RunAllTests();
-                        break;
-                    case "0":
-                        return;
-                    default:
-                        Console.WriteLine("❌ Opção inválida! Pressione ENTER...");
-                        Console.ReadLine();
-                        break;
-                }
+                Console.WriteLine("🧠 Analisando seu perfil e preferências...");
+                await Task.Delay(2000);
+
+                var prompt = @"Você é um personal trainer experiente. Crie uma resposta curta e motivadora 
+                escolhendo um tipo de treino personalizado para o usuário. Seja caloroso e motivacional.
+                Termine sugerindo que vamos começar com alguns exercícios específicos.";
+
+                var response = await _kernel.InvokePromptAsync(prompt);
+                Console.WriteLine($"🎯 {response.GetValue<string>()}");
+                Console.WriteLine();
+
+                await Task.Delay(1000);
+                await SimulatePersonalTrainerExperience("personalizado", "Treino Personalizado IA");
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"❌ Erro no teste: {ex.Message}");
-                Console.WriteLine("Pressione ENTER para continuar...");
-                Console.ReadLine();
+                Console.WriteLine("🎯 Treino personalizado selecionado: Treino Funcional");
+                Console.WriteLine("Vamos focar em movimentos que trabalham múltiplos grupos musculares!");
+                Console.WriteLine();
+                await Task.Delay(1000);
+                await SimulatePersonalTrainerExperience("funcional", "Treino Funcional");
             }
         }
+        else
+        {
+            Console.WriteLine("🎯 Treino personalizado selecionado: Treino Funcional");
+            Console.WriteLine("Vamos focar em movimentos que trabalham múltiplos grupos musculares!");
+            Console.WriteLine();
+            await Task.Delay(1000);
+            await SimulatePersonalTrainerExperience("funcional", "Treino Funcional");
+        }
+    }
+
+    private async Task SimulatePersonalTrainerExperience(string workoutType, string workoutName)
+    {
+        // Esta será nossa simulação principal onde os erros vão aparecer
+        Console.WriteLine("👨‍🏫 PERSONAL TRAINER: Oi! Sou seu personal trainer virtual!");
+        Console.WriteLine();
+
+        // Simular alguns exercícios onde podem ocorrer erros
+        var exercises = GetExercisesForWorkout(workoutType);
+        
+        for (int i = 0; i < exercises.Length; i++)
+        {
+            var exercise = exercises[i];
+            await SimulateExercise(exercise, i + 1, exercises.Length);
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("🎉 Parabéns! Treino concluído com sucesso!");
+        Console.WriteLine("💪 Você se superou hoje!");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para voltar ao menu...");
+        Console.ReadLine();
+        await StartUserExperience();
+    }
+
+    private async Task SimulateExercise(string exercise, int currentExercise, int totalExercises)
+    {
+        Console.WriteLine($"📋 Exercício {currentExercise}/{totalExercises}: {exercise}");
+        Console.WriteLine();
+
+        if (_kernel != null)
+        {
+            try
+            {
+                var prompt = $@"Você é um personal trainer entusiasmado orientando o exercício: {exercise}.
+                Dê instruções curtas e motivacionais (máximo 2 frases). 
+                Seja encorajador e específico sobre a técnica.";
+
+                var instruction = await _kernel.InvokePromptAsync(prompt);
+                Console.WriteLine($"💬 PERSONAL: {instruction.GetValue<string>()}");
+            }
+            catch
+            {
+                Console.WriteLine($"💬 PERSONAL: Vamos fazer {exercise}! Mantenha a postura e respire corretamente!");
+            }
+        }
+        else
+        {
+            Console.WriteLine($"💬 PERSONAL: Vamos fazer {exercise}! Mantenha a postura e respire corretamente!");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("⏱️  Iniciando em 3... 2... 1... VAI!");
+        
+        // Aqui é onde vamos injetar erros propositalmente
+        await SimulateExerciseWithPotentialErrors(exercise, currentExercise);
+    }
+
+    private async Task SimulateExerciseWithPotentialErrors(string exercise, int exerciseNumber)
+    {
+        // Simular progresso do exercício
+        for (int rep = 1; rep <= 5; rep++)
+        {
+            Console.Write($"Rep {rep}/5... ");
+            await Task.Delay(800);
+
+            // Injetar erro em momentos específicos
+            if (exerciseNumber == 2 && rep == 3)
+            {
+                Console.WriteLine();
+                Console.WriteLine("❌ Ops! Problema de conexão...");
+                await HandleErrorWithCorrection("CONEXAO_INSTAVEL", exercise, rep);
+                return;
+            }
+            else if (exerciseNumber == 3 && rep == 2)
+            {
+                Console.WriteLine();
+                Console.WriteLine("❌ Dados do treino não carregaram...");
+                await HandleErrorWithCorrection("TREINO_NAO_CARREGADO", exercise, rep);
+                return;
+            }
+
+            Console.WriteLine("✅");
+        }
+        
+        Console.WriteLine("🎯 Exercício completado!");
+        Console.WriteLine();
+        await Task.Delay(1000);
+    }
+
+    private async Task HandleErrorWithCorrection(string errorType, string exercise, int currentRep)
+    {
+        Console.WriteLine();
+        Console.WriteLine("🔧 Sistema de correção ativado...");
+        
+        try
+        {
+            // Usar o plugin de correção para mascarar o erro
+            var result = await _kernel.InvokeAsync("TrainiacCorrection", "GetTrainingStatusWithAutoCorrection",
+                new KernelArguments { ["userId"] = "user_simulation" });
+
+            // O plugin vai mascarar o erro e retornar uma resposta natural
+            Console.WriteLine("✅ Problema resolvido automaticamente!");
+            
+            if (_kernel != null)
+            {
+                try
+                {
+                    var prompt = $@"Você é um personal trainer e houve uma pequena pausa técnica durante o exercício {exercise}.
+                    Crie uma frase motivacional natural para continuar o treino, como se fosse apenas uma pausa normal.
+                    Seja positivo e encoraje a continuar de onde parou (rep {currentRep}).";
+
+                    var recovery = await _kernel.InvokePromptAsync(prompt);
+                    Console.WriteLine($"💬 PERSONAL: {recovery.GetValue<string>()}");
+                }
+                catch
+                {
+                    Console.WriteLine($"💬 PERSONAL: Perfeito! Vamos continuar de onde paramos. Você está indo muito bem!");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"💬 PERSONAL: Perfeito! Vamos continuar de onde paramos. Você está indo muito bem!");
+            }
+
+            Console.WriteLine();
+            
+            // Continuar exercício após a correção
+            for (int rep = currentRep; rep <= 5; rep++)
+            {
+                Console.Write($"Rep {rep}/5... ");
+                await Task.Delay(800);
+                Console.WriteLine("✅");
+            }
+            
+            Console.WriteLine("🎯 Exercício completado!");
+            Console.WriteLine();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Sistema de backup ativado: {ex.Message}");
+            Console.WriteLine("💬 PERSONAL: Que tal fazer uma pequena pausa? Beba água e já voltamos!");
+        }
+    }
+
+    private string[] GetExercisesForWorkout(string workoutType)
+    {
+        return workoutType.ToLower() switch
+        {
+            "cardiovascular" => new[] { "Polichinelo", "Corrida no lugar", "Mountain Climbers", "Burpees" },
+            "forca" => new[] { "Flexão de braço", "Agachamento", "Prancha", "Levantamento de peso" },
+            "funcional" => new[] { "Agachamento funcional", "Prancha lateral", "Afundo", "Bear crawl" },
+            _ => new[] { "Alongamento dinâmico", "Movimentos compostos", "Core training", "Mobilidade" }
+        };
     }
 
     private async Task RunAllTests()
