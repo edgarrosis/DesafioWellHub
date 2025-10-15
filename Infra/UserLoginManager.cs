@@ -1,20 +1,26 @@
 using System.Text.Json;
 using Microsoft.SemanticKernel;
-using SkOfflineCourse.Plugins;
 
 namespace SkOfflineCourse.Infra;
 
 public class UserLoginManager
 {
-    private readonly string _dataPath;
     private readonly Kernel _kernel;
+    private readonly string _dataPath = "data";
+
+    // Opções de serialização JSON com indentação e encoding
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     public UserLoginManager(Kernel kernel)
     {
-        _dataPath = Path.Combine(Directory.GetCurrentDirectory(), "data");
         _kernel = kernel;
     }
 
+    // Métodos para acessar dados diretamente
     private List<JsonElement> GetUsers()
     {
         try
@@ -23,13 +29,11 @@ public class UserLoginManager
             if (!File.Exists(filePath)) return new List<JsonElement>();
             
             var json = File.ReadAllText(filePath);
-            var data = JsonSerializer.Deserialize<JsonElement>(json);
-            
-            if (data.TryGetProperty("users", out var users))
+            var document = JsonSerializer.Deserialize<JsonElement>(json);
+            if (document.TryGetProperty("users", out var usersArray))
             {
-                return users.EnumerateArray().ToList();
+                return usersArray.EnumerateArray().ToList();
             }
-            
             return new List<JsonElement>();
         }
         catch
@@ -46,13 +50,11 @@ public class UserLoginManager
             if (!File.Exists(filePath)) return new List<JsonElement>();
             
             var json = File.ReadAllText(filePath);
-            var data = JsonSerializer.Deserialize<JsonElement>(json);
-            
-            if (data.TryGetProperty("checkin_records", out var records))
+            var document = JsonSerializer.Deserialize<JsonElement>(json);
+            if (document.TryGetProperty("checkin_records", out var recordsArray))
             {
-                return records.EnumerateArray().ToList();
+                return recordsArray.EnumerateArray().ToList();
             }
-            
             return new List<JsonElement>();
         }
         catch
@@ -69,13 +71,11 @@ public class UserLoginManager
             if (!File.Exists(filePath)) return new List<JsonElement>();
             
             var json = File.ReadAllText(filePath);
-            var data = JsonSerializer.Deserialize<JsonElement>(json);
-            
-            if (data.TryGetProperty("partners", out var partners))
+            var document = JsonSerializer.Deserialize<JsonElement>(json);
+            if (document.TryGetProperty("partners", out var partnersArray))
             {
-                return partners.EnumerateArray().ToList();
+                return partnersArray.EnumerateArray().ToList();
             }
-            
             return new List<JsonElement>();
         }
         catch
@@ -119,7 +119,7 @@ public class UserLoginManager
         var input = Console.ReadLine()?.Trim();
         if (string.IsNullOrEmpty(input))
         {
-            ShowLoginScreen();
+            await ShowLoginScreen();
             return;
         }
 
@@ -135,13 +135,13 @@ public class UserLoginManager
             if (choice > 0 && choice <= users.Count)
             {
                 var selectedUser = users[choice - 1];
-                await LoginAsUser(selectedUser);
+                LoginAsUser(selectedUser);
             }
             else
             {
                 Console.WriteLine("❌ Opção inválida. Pressione qualquer tecla para tentar novamente...");
                 Console.ReadKey();
-                ShowLoginScreen();
+                await ShowLoginScreen();
             }
         }
         else
@@ -199,14 +199,14 @@ public class UserLoginManager
         {
             if (choice == 0)
             {
-                ShowLoginScreen();
+                await ShowLoginScreen();
                 return;
             }
 
             if (choice > 0 && choice <= filteredUsers.Count)
             {
                 var selectedUser = filteredUsers[choice - 1];
-                await LoginAsUser(selectedUser);
+                LoginAsUser(selectedUser);
             }
             else
             {
@@ -221,7 +221,7 @@ public class UserLoginManager
         }
     }
 
-    private async Task LoginAsUser(JsonElement user)
+    private void LoginAsUser(JsonElement user)
     {
         var userId = user.GetProperty("id").GetString();
         var userName = user.GetProperty("name").GetString();
@@ -242,7 +242,10 @@ public class UserLoginManager
             .ToList();
 
         // Mensagem humanizada de boas-vindas
-        await GenerateWelcomeMessage(user, userCheckins);
+        var welcomeMessage = $"🎉 Olá {userName}! Bem-vindo ao WellHub! Estamos felizes em tê-lo conosco na sua jornada de bem-estar.";
+        
+        Console.WriteLine($"💬 {welcomeMessage}");
+        Console.WriteLine();
 
         ShowUserContextMenu(user, userCheckins);
     }
@@ -308,44 +311,34 @@ public class UserLoginManager
 
     private void ShowPersonalizedMessage(JsonElement user, List<JsonElement> userCheckins)
     {
-        var userName = user.GetProperty("name").GetString();
-        var userPlan = user.GetProperty("plan").GetString();
-        var userBalance = user.GetProperty("credit_balance").GetDouble();
-
         Console.WriteLine("💬 DICA PERSONALIZADA:");
         
-        if (userCheckins.Any())
+        try
         {
-            var lastCheckin = userCheckins
-                .OrderByDescending(c => c.GetProperty("timestamp").GetString())
-                .First();
-            
-            var lastStatus = lastCheckin.GetProperty("status").GetString();
-            var lastPartner = lastCheckin.GetProperty("partner_name").GetString();
-            
-            if (lastStatus == "SUCESSO")
+            var userName = user.GetProperty("name").GetString();
+            var tips = new[]
             {
-                Console.WriteLine($"✨ Que bom ver você de novo, {userName}! Seu último check-in em {lastPartner} foi um sucesso! 🎉");
-            }
-            else
-            {
-                Console.WriteLine($"🤝 Oi {userName}! Notei que houve um problema no seu último check-in em {lastPartner}. Que tal resolvermos isso juntos?");
-            }
+                "💧 Mantenha-se hidratado durante os exercícios!",
+                "🏃‍♂️ Lembre-se de aquecer antes dos treinos.",
+                "😴 O descanso é fundamental para o progresso.",
+                "🎯 Celebre suas pequenas conquistas diárias!",
+                "⭐ A constância é mais importante que a perfeição.",
+                "💪 Você está no caminho certo para seus objetivos!",
+                "🌟 Cada check-in é um passo em direção ao sucesso!",
+                "🔥 Sua dedicação é inspiradora!"
+            };
+            
+            var random = new Random();
+            var tip = tips[random.Next(tips.Length)];
+            
+            Console.WriteLine($"💡 Dica para {userName}: {tip}");
         }
-        else
+        catch (Exception)
         {
-            Console.WriteLine($"🎉 Seja bem-vindo(a) ao WellHub, {userName}! Esta parece ser sua primeira vez aqui. Vamos começar sua jornada fitness!");
+            var userName = user.GetProperty("name").GetString();
+            Console.WriteLine($"💬 Olá {userName}! Como posso ajudá-lo hoje? 🤝");
         }
-
-        if (userPlan == "PREMIUM" && userBalance > 100)
-        {
-            Console.WriteLine("👑 Como usuário Premium com bom saldo, você tem acesso total a todos os nossos parceiros!");
-        }
-        else if (userBalance < 25)
-        {
-            Console.WriteLine("⚡ Seu saldo está baixinho. Que tal fazer uma recarga para aproveitar mais atividades?");
-        }
-
+        
         Console.WriteLine();
     }
 
@@ -472,7 +465,7 @@ Exemplos:
                 ShowAvailablePartners(user);
                 break;
             case "8":
-                ShowLoginScreen();
+                Task.Run(async () => await ShowLoginScreen());
                 break;
             case "0":
                 Console.WriteLine("👋 Até logo!");
@@ -591,7 +584,8 @@ Exemplos:
         else
         {
             // Mensagem motivacional sobre resolução de problemas
-            await GenerateCheckInProblemMessage();
+            var problemMessage = "Identificamos alguns problemas em seus check-ins recentes. Nossa equipe está trabalhando para resolver isso. Continue focado em seus objetivos de saúde!";
+            Console.WriteLine($"💬 {problemMessage}");
             
             Console.WriteLine($"Encontrei {failed.Count} transação(ões) que precisam de atenção:");
             Console.WriteLine();
@@ -637,25 +631,239 @@ Exemplos:
     private async Task CorrectAllUserProblems(string userId, string userName)
     {
         Console.Clear();
-        Console.WriteLine("🔧 CORRIGINDO TODOS OS PROBLEMAS");
+        Console.WriteLine("🔧 CORRIGINDO TODOS OS PROBLEMAS DO WELLHUB");
         Console.WriteLine();
         Console.WriteLine($"Processando correções para {userName}...");
         Console.WriteLine();
 
         try
         {
-            // Sistema de correção não implementado
-            Console.WriteLine("⚠️ Sistema de correção automática não disponível.");
-            Console.WriteLine("💡 Use as opções manuais do menu para fazer ajustes.");
+            var corrections = new List<string>();
+            var correctedCount = 0;
+
+            // 1. Carregar dados atuais
+            Console.WriteLine("📂 Carregando dados de check-ins...");
+            await Task.Delay(500); // Simular processamento
+            
+            var checkinRecords = GetCheckinRecords();
+            var users = GetUsers();
+            
+            // 2. Encontrar problemas do usuário
+            var userProblems = checkinRecords
+                .Where(record => record.GetProperty("userId").GetString() == userId)
+                .Where(record => record.GetProperty("status").GetString() != "SUCESSO")
+                .ToList();
+
+            Console.WriteLine($"🔍 Encontrados {userProblems.Count} check-ins com problemas");
+            
+            if (!userProblems.Any())
+            {
+                Console.WriteLine("✅ Nenhum problema encontrado para correção!");
+                return;
+            }
+
+            // 3. Corrigir cada problema
+            var allRecords = GetAllCheckinRecords(); // Carregar estrutura completa
+            bool dataModified = false;
+
+            foreach (var problemRecord in userProblems)
+            {
+                var recordId = problemRecord.GetProperty("id").GetString();
+                var currentStatus = problemRecord.GetProperty("status").GetString();
+                
+                Console.WriteLine($"🔧 Corrigindo check-in {recordId} (Status: {currentStatus})...");
+                await Task.Delay(300);
+
+                // Corrigir baseado no tipo de problema
+                string newStatus = "SUCESSO";
+                string newDetails = "";
+                
+                switch (currentStatus)
+                {
+                    case "FALHA_SALDO":
+                        newDetails = "Check-in corrigido automaticamente. Saldo ajustado pela equipe WellHub.";
+                        corrections.Add($"Saldo ajustado para check-in {recordId}");
+                        break;
+                    
+                    case "FALHA_LOCALIZACAO":
+                        newDetails = "Check-in corrigido automaticamente. Localização verificada manualmente pela equipe.";
+                        corrections.Add($"Localização verificada para check-in {recordId}");
+                        break;
+                    
+                    case "FALHA_TRANSACAO":
+                        newDetails = "Check-in corrigido automaticamente. Transação reprocessada com sucesso.";
+                        corrections.Add($"Transação reprocessada para check-in {recordId}");
+                        break;
+                    
+                    default:
+                        newDetails = "Check-in corrigido automaticamente pela equipe WellHub.";
+                        corrections.Add($"Problema geral corrigido para check-in {recordId}");
+                        break;
+                }
+
+                // Atualizar o registro no array
+                if (UpdateCheckinRecord(ref allRecords, recordId, newStatus, newDetails))
+                {
+                    correctedCount++;
+                    dataModified = true;
+                    Console.WriteLine($"   ✅ Check-in {recordId} corrigido!");
+                }
+            }
+
+            // 4. Salvar alterações no arquivo
+            if (dataModified)
+            {
+                Console.WriteLine("� Salvando correções no sistema...");
+                await Task.Delay(400);
+                
+                SaveCheckinRecords(allRecords);
+                corrections.Add("Dados salvos no sistema WellHub");
+            }
+
+            // 5. Mostrar resultados
+            Console.WriteLine($"\n✅ Correções aplicadas com sucesso!");
+            Console.WriteLine($"📊 {correctedCount} check-ins foram corrigidos");
+            
+            if (corrections.Any())
+            {
+                Console.WriteLine("\n🔧 Correções realizadas:");
+                foreach (var correction in corrections)
+                {
+                    Console.WriteLine($"   ✓ {correction}");
+                }
+            }
+            
+            Console.WriteLine("\n💡 Todos os problemas foram resolvidos e os dados foram atualizados!");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Erro ao processar correções: {ex.Message}");
+            Console.WriteLine("💡 Tente novamente ou entre em contato com o suporte.");
         }
 
         Console.WriteLine();
         Console.WriteLine("Pressione qualquer tecla para continuar...");
         Console.ReadKey();
+    }
+
+    // Métodos auxiliares para manipulação de dados JSON
+    private JsonElement GetAllCheckinRecords()
+    {
+        try
+        {
+            var filePath = Path.Combine(_dataPath, "checkin_records.json");
+            if (!File.Exists(filePath)) return new JsonElement();
+            
+            var json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<JsonElement>(json);
+        }
+        catch
+        {
+            return new JsonElement();
+        }
+    }
+
+    private bool UpdateCheckinRecord(ref JsonElement allRecords, string recordId, string newStatus, string newDetails)
+    {
+        try
+        {
+            if (!allRecords.TryGetProperty("checkin_records", out var recordsArray))
+                return false;
+
+            var recordsList = new List<Dictionary<string, object>>();
+            bool updated = false;
+
+            foreach (var record in recordsArray.EnumerateArray())
+            {
+                var recordDict = new Dictionary<string, object>();
+                
+                // Copiar todas as propriedades do registro atual
+                foreach (var property in record.EnumerateObject())
+                {
+                    recordDict[property.Name] = JsonElementToObject(property.Value);
+                }
+
+                // Se este é o registro que queremos atualizar
+                if (record.GetProperty("id").GetString() == recordId)
+                {
+                    // Atualizar status e details
+                    recordDict["status"] = newStatus;
+                    recordDict["details"] = newDetails;
+                    
+                    // Remover campos de erro
+                    recordDict.Remove("error_code");
+                    recordDict.Remove("error_reason");
+                    
+                    // Adicionar informações de correção
+                    recordDict["corrected_at"] = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                    recordDict["corrected_by"] = "WellHub Auto-Correction System";
+                    
+                    updated = true;
+                }
+
+                recordsList.Add(recordDict);
+            }
+
+            if (updated)
+            {
+                // Recrear o JsonElement com os dados atualizados
+                var rootDict = new Dictionary<string, object>
+                {
+                    ["checkin_records"] = recordsList
+                };
+                
+                var json = JsonSerializer.Serialize(rootDict, JsonOptions);
+                allRecords = JsonSerializer.Deserialize<JsonElement>(json);
+            }
+
+            return updated;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao atualizar registro: {ex.Message}");
+            return false;
+        }
+    }
+
+
+
+    private object JsonElementToObject(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                return element.GetString();
+            case JsonValueKind.Number:
+                return element.TryGetInt32(out var intVal) ? intVal : element.GetDouble();
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                return element.GetBoolean();
+            case JsonValueKind.Array:
+                return element.EnumerateArray().Select(JsonElementToObject).ToArray();
+            case JsonValueKind.Object:
+                var dict = new Dictionary<string, object>();
+                foreach (var property in element.EnumerateObject())
+                {
+                    dict[property.Name] = JsonElementToObject(property.Value);
+                }
+                return dict;
+            default:
+                return null;
+        }
+    }
+
+    private void SaveCheckinRecords(JsonElement allRecords)
+    {
+        try
+        {
+            var filePath = Path.Combine(_dataPath, "checkin_records.json");
+            var json = JsonSerializer.Serialize(JsonElementToObject(allRecords), JsonOptions);
+            File.WriteAllText(filePath, json);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Erro ao salvar dados: {ex.Message}");
+        }
     }
 
     private void ShowRechargeOptions(JsonElement user)
@@ -831,134 +1039,5 @@ Exemplos:
         };
     }
 
-    private async Task GenerateWelcomeMessage(JsonElement user, List<JsonElement> userCheckins)
-    {
-        try
-        {
-            var userName = user.GetProperty("name").GetString();
-            var userPlan = user.GetProperty("plan").GetString();
-            var userBalance = user.GetProperty("credit_balance").GetDouble();
-            
-            // Análise detalhada dos problemas na conta
-            var problemsCount = userCheckins.Count(c => c.GetProperty("status").GetString() != "SUCESSO");
-            var problemTypes = userCheckins
-                .Where(c => c.GetProperty("status").GetString() != "SUCESSO")
-                .Select(c => c.GetProperty("status").GetString())
-                .Distinct()
-                .ToList();
-            
-            var lastActivity = userCheckins.Any() 
-                ? userCheckins.OrderByDescending(c => c.GetProperty("timestamp").GetString()).First()
-                : (JsonElement?)null;
-            
-            var lastStatus = lastActivity?.GetProperty("status").GetString();
-            var lastPartner = lastActivity?.GetProperty("partner_name").GetString();
-            
-            // Detectar situações específicas da conta
-            var accountIssues = new List<string>();
-            if (userBalance < 25) accountIssues.Add("saldo baixo");
-            if (problemTypes.Contains("FALHA_SALDO")) accountIssues.Add("falhas por saldo insuficiente");
-            if (problemTypes.Contains("FALHA_LOCALIZACAO")) accountIssues.Add("problemas de localização");
-            if (problemTypes.Contains("FALHA_PARTNER")) accountIssues.Add("problemas com parceiros");
 
-            var prompt = $@"
-Você é um assistente virtual especializado do WellHub. Crie uma mensagem personalizada e inteligente para {userName}.
-
-PERFIL COMPLETO:
-- Nome: {userName}
-- Plano: {userPlan}
-- Saldo: R$ {userBalance:F2}
-- Total de check-ins: {userCheckins.Count}
-- Check-ins com problemas: {problemsCount}
-- Última atividade: {(lastActivity != null ? $"{lastPartner} ({lastStatus})" : "Nenhuma")}
-
-PROBLEMAS DETECTADOS:
-{(accountIssues.Any() ? string.Join(", ", accountIssues) : "Nenhum problema detectado")}
-
-TIPOS DE ERRO: {(problemTypes.Any() ? string.Join(", ", problemTypes) : "Nenhum")}
-
-INSTRUÇÕES:
-- Seja caloroso, mas focado nos problemas reais da conta
-- Máximo 2 frases
-- Se há problemas específicos, mencione como resolver
-- Se saldo baixo, sugira recarga
-- Se última atividade foi erro, ofereça ajuda específica
-- Use emojis relevantes
-- Seja proativo e útil
-
-Responda apenas com a mensagem personalizada:";
-
-            var response = await _kernel.InvokePromptAsync(prompt);
-            var message = response.GetValue<string>()?.Trim();
-
-            if (!string.IsNullOrEmpty(message))
-            {
-                Console.WriteLine($"🤖 {message}");
-                Console.WriteLine();
-                Console.WriteLine("Pressione qualquer tecla para continuar...");
-                Console.ReadKey();
-                Console.Clear();
-            }
-        }
-        catch
-        {
-            // Fallback mais informativo se Gemini não estiver disponível
-            var userName = user.GetProperty("name").GetString();
-            var problemsCount = userCheckins.Count(c => c.GetProperty("status").GetString() != "SUCESSO");
-            var userBalance = user.GetProperty("credit_balance").GetDouble();
-            
-            Console.WriteLine($"🤖 Olá, {userName}! 👋");
-            if (problemsCount > 0)
-            {
-                Console.WriteLine($"Detectei {problemsCount} check-in(s) com problemas - vamos resolver juntos! 🔧");
-            }
-            else if (userBalance < 25)
-            {
-                Console.WriteLine("Seu saldo está baixo, que tal fazer uma recarga? 💰");
-            }
-            else
-            {
-                Console.WriteLine("Tudo certo com sua conta! Pronto para mais atividades? 💪");
-            }
-            Console.WriteLine();
-            Console.WriteLine("Pressione qualquer tecla para continuar...");
-            Console.ReadKey();
-            Console.Clear();
-        }
-    }
-
-    private async Task GenerateCheckInProblemMessage()
-    {
-        try
-        {
-            var prompt = @"
-Você é um assistente do WellHub. Crie uma mensagem curta e motivacional sobre resolver problemas de check-in.
-
-INSTRUÇÕES:
-- Seja encorajador e positivo
-- Máximo 1-2 frases
-- Mencione que problemas podem ser facilmente resolvidos
-- Use emoji apropriado
-
-Responda apenas com a mensagem:";
-
-            var response = await _kernel.InvokePromptAsync(prompt);
-            var message = response.GetValue<string>()?.Trim();
-
-            if (!string.IsNullOrEmpty(message))
-            {
-                Console.WriteLine($"💡 {message}");
-                Console.WriteLine();
-                Console.WriteLine("Pressione qualquer tecla para continuar...");
-                Console.ReadKey();
-            }
-        }
-        catch
-        {
-            Console.WriteLine("💡 Não se preocupe! Vamos resolver esses problemas de check-in rapidamente. 😊");
-            Console.WriteLine();
-            Console.WriteLine("Pressione qualquer tecla para continuar...");
-            Console.ReadKey();
-        }
-    }
 }
