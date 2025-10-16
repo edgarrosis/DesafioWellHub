@@ -133,7 +133,21 @@ public class TrainiacMockApi
         {
             { "user_test_timeout", "TIMEOUT_SERVIDOR" },
             { "user_test_corrupted", "DADOS_CORROMPIDOS" },
-            { "user_test_lost", "SESSAO_PERDIDA" }
+            { "user_test_lost", "SESSAO_PERDIDA" },
+            // Usuarios dos treinos simulados
+            { "user_simulation", "SUCCESS" },
+            { "user_cardiovascular", "SUCCESS" },
+            { "user_forca", "SUCCESS" },
+            { "user_funcional", "SUCCESS" },
+            { "user_personalizado", "SUCCESS" },
+            { "user_strength_training", "SUCCESS" },
+            { "user_workout", "SUCCESS" },
+            { "user_001", "SUCCESS" },
+            { "user_002", "SUCCESS" },
+            { "user_003", "SUCCESS" },
+            // Casos específicos das Issues #11 e #12
+            { "emergency_user", "CONEXAO_INSTAVEL" },
+            { "fallback_user", "TREINO_NAO_CARREGADO" }
         };
 
         foreach (var testCase in testCases)
@@ -161,6 +175,7 @@ public class TrainiacMockApi
             Console.WriteLine("Endpoints disponiveis:");
             Console.WriteLine($"   GET {_baseUrl}treino/status/{{userId}}");
             Console.WriteLine($"   POST {_baseUrl}treino/backup");
+            Console.WriteLine($"   POST {_baseUrl}backup/session");
             Console.WriteLine($"   GET {_baseUrl}exercicio/{{exerciseId}}");
             Console.WriteLine($"   GET {_baseUrl}usuarios");
             Console.WriteLine();
@@ -236,6 +251,10 @@ public class TrainiacMockApi
                 
                 case "POST" when path == "/treino/backup":
                     responseContent = await HandlePostTrainingBackup(request);
+                    break;
+                
+                case "POST" when path == "/backup/session":
+                    responseContent = await HandlePostSessionBackup(request);
                     break;
                 
                 default:
@@ -585,6 +604,57 @@ public class TrainiacMockApi
         catch (Exception ex)
         {
             Console.WriteLine($"Erro ao parar Mock API: {ex.Message}");
+        }
+    }
+
+    private async Task<string> HandlePostSessionBackup(HttpListenerRequest request)
+    {
+        // Ler dados da requisição
+        using var reader = new StreamReader(request.InputStream, Encoding.UTF8);
+        var requestBody = await reader.ReadToEndAsync();
+        
+        Console.WriteLine($"💾 Salvando backup da sessão - {requestBody.Length} bytes");
+        
+        try
+        {
+            // Parsear dados da sessão
+            var sessionData = JsonSerializer.Deserialize<JsonElement>(requestBody);
+            var userId = sessionData.TryGetProperty("userId", out var userProp) ? userProp.GetString() : "unknown";
+            var currentStep = sessionData.TryGetProperty("currentStep", out var stepProp) ? stepProp.GetString() : "backup";
+            
+            Console.WriteLine($"-> POST /backup/session");
+            Console.WriteLine($"   User: {userId}, Step: {currentStep}");
+            
+            // Simular processamento do backup
+            await Task.Delay(100); // Simular latência do banco de dados
+            
+            var backupId = $"session_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Random.Shared.Next(1000, 9999)}";
+            
+            var result = new
+            {
+                success = true,
+                message = $"Backup da sessão salvo com sucesso",
+                backupId = backupId,
+                userId = userId,
+                currentStep = currentStep,
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                dataSize = requestBody.Length
+            };
+
+            return JsonSerializer.Serialize(result, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Erro ao processar backup: {ex.Message}");
+            
+            var errorResult = new
+            {
+                success = false,
+                message = $"Erro ao salvar backup: {ex.Message}",
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+            };
+
+            return JsonSerializer.Serialize(errorResult, JsonOptions);
         }
     }
 

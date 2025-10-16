@@ -1289,7 +1289,29 @@ public class TrainiacSystemTest
                     using var doc = System.Text.Json.JsonDocument.Parse(fallbackString);
                     var root = doc.RootElement;
                     
-                    if (root.TryGetProperty("fallbackContent", out var content))
+                    if (root.TryGetProperty("fallbackUI", out var fallbackUI))
+                    {
+                        Console.WriteLine("💬 INTERFACE DE FALLBACK:");
+                        Console.WriteLine("========================");
+                        var fallbackText = fallbackUI.GetString();
+                        if (!string.IsNullOrEmpty(fallbackText))
+                        {
+                            // Processar o texto formatado, removendo caracteres de escape
+                            var cleanedText = fallbackText
+                                .Replace("\\r\\n", "\n")
+                                .Replace("\\n", "\n")
+                                .Replace("\\u0022", "\"")
+                                .Replace("\\u0027", "'");
+                            
+                            var lines = cleanedText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                            foreach (var line in lines)
+                            {
+                                Console.WriteLine(line);
+                            }
+                        }
+                        Console.WriteLine();
+                    }
+                    else if (root.TryGetProperty("fallbackContent", out var content))
                     {
                         Console.WriteLine($"💬 FALLBACK UI: {content.GetString()}");
                     }
@@ -1605,12 +1627,199 @@ public class TrainiacSystemTest
                 Console.WriteLine($"🧠 Raciocínio IA: {reasoning.GetString()}");
             }
 
+            // Tratamento especial para fallback UI formatado
+            if (root.TryGetProperty("fallbackUI", out var fallbackUI))
+            {
+                Console.WriteLine();
+                Console.WriteLine("🛡️ INTERFACE DE FALLBACK:");
+                Console.WriteLine("========================");
+                var fallbackUIContent = fallbackUI.GetString();
+                
+                // Se o fallback contém JSON aninhado, parse novamente
+                if (!string.IsNullOrEmpty(fallbackUIContent) && fallbackUIContent.StartsWith("{") && fallbackUIContent.EndsWith("}"))
+                {
+                    try
+                    {
+                        using var fallbackDoc = System.Text.Json.JsonDocument.Parse(fallbackUIContent);
+                        var fallbackRoot = fallbackDoc.RootElement;
+                        
+                        if (fallbackRoot.TryGetProperty("fallbackUI", out var nestedFallback))
+                        {
+                            Console.WriteLine(nestedFallback.GetString());
+                        }
+                        else if (fallbackRoot.TryGetProperty("fallbackContent", out var nestedContent))
+                        {
+                            Console.WriteLine(nestedContent.GetString());
+                        }
+                        else
+                        {
+                            Console.WriteLine(fallbackUIContent);
+                        }
+                    }
+                    catch
+                    {
+                        Console.WriteLine(fallbackUIContent);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine(fallbackUIContent ?? "Fallback UI não disponível");
+                }
+                Console.WriteLine();
+            }
+
+            // Tratamento para fallbackContent (usado em outras partes)
+            if (root.TryGetProperty("fallbackContent", out var fallbackContent))
+            {
+                Console.WriteLine();
+                Console.WriteLine("💬 MENSAGEM DE FALLBACK:");
+                Console.WriteLine("========================");
+                Console.WriteLine(fallbackContent.GetString());
+                Console.WriteLine();
+            }
+
+            // Tratamento para mensagem motivacional
+            if (root.TryGetProperty("motivationalMessage", out var motivationalMessage))
+            {
+                Console.WriteLine();
+                Console.WriteLine("🌟 MENSAGEM MOTIVACIONAL:");
+                Console.WriteLine("========================");
+                Console.WriteLine(motivationalMessage.GetString());
+                Console.WriteLine();
+            }
+
             if (root.TryGetProperty("actionResults", out var results))
             {
                 Console.WriteLine("🔧 Ações Executadas:");
                 foreach (var result in results.EnumerateArray())
                 {
-                    Console.WriteLine($"   ✅ {result.GetString()}");
+                    var resultString = result.GetString();
+                    
+                    // Primeiro, verificar se começa com um prefixo conhecido e extrair o JSON
+                    var jsonPart = resultString;
+                    var actionType = "Ação";
+                    
+                    if (!string.IsNullOrEmpty(resultString))
+                    {
+                        if (resultString.StartsWith("Fallback UI: "))
+                        {
+                            jsonPart = resultString.Substring("Fallback UI: ".Length);
+                            actionType = "Fallback UI";
+                        }
+                        else if (resultString.StartsWith("Backup executado: "))
+                        {
+                            jsonPart = resultString.Substring("Backup executado: ".Length);
+                            actionType = "Backup";
+                        }
+                        else if (resultString.StartsWith("Fallback UI gerado: "))
+                        {
+                            jsonPart = resultString.Substring("Fallback UI gerado: ".Length);
+                            actionType = "Fallback UI";
+                        }
+                        else if (resultString.StartsWith("Correção automática: "))
+                        {
+                            jsonPart = resultString.Substring("Correção automática: ".Length);
+                            actionType = "Correção";
+                        }
+                        else if (resultString.StartsWith("Backup de emergência: "))
+                        {
+                            jsonPart = resultString.Substring("Backup de emergência: ".Length);
+                            actionType = "Backup de Emergência";
+                        }
+                    }
+                    
+                    // Se o resultado é um JSON, tenta parseá-lo para extrair conteúdo útil
+                    if (!string.IsNullOrEmpty(jsonPart) && jsonPart.Trim().StartsWith("{") && jsonPart.Trim().EndsWith("}"))
+                    {
+                        try
+                        {
+                            using var resultDoc = System.Text.Json.JsonDocument.Parse(jsonPart);
+                            var resultRoot = resultDoc.RootElement;
+                            
+                            // Detectar se é resultado de Fallback UI
+                            if (resultRoot.TryGetProperty("fallbackUI", out var actionFallback))
+                            {
+                                Console.WriteLine("   🛡️ INTERFACE DE FALLBACK GERADA:");
+                                Console.WriteLine("   ================================");
+                                var fallbackUIText = actionFallback.GetString();
+                                if (!string.IsNullOrEmpty(fallbackUIText))
+                                {
+                                    // Exibir o conteúdo do fallback UI formatado, removendo caracteres de escape
+                                    var cleanedText = fallbackUIText
+                                        .Replace("\\r\\n", "\n")
+                                        .Replace("\\n", "\n") 
+                                        .Replace("\\u0022", "\"")
+                                        .Replace("\\u0027", "'")
+                                        .Replace("\\uD83D\\uDD04", "🔄")
+                                        .Replace("\\uD83C\\uDFAA", "🎪")
+                                        .Replace("\\uD83C\\uDF1F", "🌟")
+                                        .Replace("\\uD83D\\uDCAB", "💫");
+                                        
+                                    var lines = cleanedText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                                    foreach (var line in lines)
+                                    {
+                                        Console.WriteLine($"   {line}");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("   Conteúdo de fallback não disponível");
+                                }
+                                Console.WriteLine();
+                                
+                                // Também mostrar informações de sucesso se disponível
+                                if (resultRoot.TryGetProperty("success", out var fbSuccess) && fbSuccess.GetBoolean())
+                                {
+                                    Console.WriteLine("   ✅ Fallback UI gerado com sucesso");
+                                }
+                            }
+                            // Detectar se é resultado de backup
+                            else if (resultRoot.TryGetProperty("backupId", out var backupId))
+                            {
+                                Console.WriteLine("   💾 BACKUP EXECUTADO:");
+                                Console.WriteLine("   ==================");
+                                Console.WriteLine($"   📋 ID do Backup: {backupId.GetString()}");
+                                
+                                if (resultRoot.TryGetProperty("userId", out var userId))
+                                {
+                                    Console.WriteLine($"   👤 Usuário: {userId.GetString()}");
+                                }
+                                
+                                if (resultRoot.TryGetProperty("currentStep", out var step))
+                                {
+                                    Console.WriteLine($"   📍 Etapa: {step.GetString()}");
+                                }
+                                
+                                if (resultRoot.TryGetProperty("message", out var msg))
+                                {
+                                    Console.WriteLine($"   📝 Status: {msg.GetString()}");
+                                }
+                                Console.WriteLine();
+                            }
+                            // Para outros JSONs válidos, mostrar resumo
+                            else if (resultRoot.TryGetProperty("success", out var actionSuccess) && actionSuccess.GetBoolean())
+                            {
+                                Console.WriteLine($"   ✅ {actionType} executado com sucesso");
+                                
+                                if (resultRoot.TryGetProperty("message", out var successMsg))
+                                {
+                                    Console.WriteLine($"      📝 {successMsg.GetString()}");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine($"   📋 {actionType}: {jsonPart}");
+                            }
+                        }
+                        catch
+                        {
+                            Console.WriteLine($"   📋 {actionType}: {jsonPart}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"   ✅ {resultString ?? "Resultado não disponível"}");
+                    }
                 }
             }
         }

@@ -136,14 +136,14 @@ public class AntiBugAgent
                 // SE o erro for crítico (SESSAO_PERDIDA), ENTÃO SaveSessionBackup
                 Console.WriteLine("💾 AÇÃO: Executando backup de sessão crítica...");
                 var backupResult = await ExecuteSessionBackup(userId, sessionData, errorContext);
-                result.actionResults.Add($"Backup executado: {backupResult}");
+                result.actionResults.Add(backupResult);  // Adicionar o JSON diretamente
                 break;
                 
             case "TREINO_NAO_CARREGADO":
                 // SE o erro for de visualização (TREINO_NAO_CARREGADO), ENTÃO GetExerciseDetails → GenerateFallbackUI
                 Console.WriteLine("🛡️ AÇÃO: Recuperando exercícios e gerando UI de fallback...");
                 var exerciseResult = await RecoverExerciseAndGenerateFallback(userId, errorContext);
-                result.actionResults.Add($"Fallback UI gerado: {exerciseResult}");
+                result.actionResults.Add(exerciseResult);  // Adicionar o JSON diretamente
                 break;
                 
             case "CONNECTION_ERROR":
@@ -154,20 +154,20 @@ public class AntiBugAgent
                 {
                     Console.WriteLine("💾 AÇÃO: Backup de emergência devido à criticidade...");
                     var emergencyBackup = await ExecuteSessionBackup(userId, sessionData, errorContext);
-                    result.actionResults.Add($"Backup de emergência: {emergencyBackup}");
+                    result.actionResults.Add(emergencyBackup);  // Adicionar o JSON diretamente
                 }
                 else
                 {
                     Console.WriteLine("🛡️ AÇÃO: Gerando interface de fallback...");
                     var fallbackResult = await GenerateFallbackUI(errorType, userId, errorContext);
-                    result.actionResults.Add($"Fallback UI: {fallbackResult}");
+                    result.actionResults.Add(fallbackResult);  // Adicionar o JSON diretamente
                 }
                 break;
                 
             default:
                 Console.WriteLine("🔄 AÇÃO: Aplicando correção automática padrão...");
                 var autoCorrection = await ApplyAutoCorrection(userId, errorType);
-                result.actionResults.Add($"Correção automática: {autoCorrection}");
+                result.actionResults.Add(autoCorrection);  // Adicionar o JSON diretamente
                 break;
         }
 
@@ -216,7 +216,36 @@ public class AntiBugAgent
             var exerciseDetails = "Exercícios básicos disponíveis";
             if (exerciseResult != null && !string.IsNullOrEmpty(exerciseResult.GetValue<string>()))
             {
-                exerciseDetails = exerciseResult.GetValue<string>()!;
+                var rawExerciseData = exerciseResult.GetValue<string>()!;
+                
+                // Processar o JSON para extrair informações úteis
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(rawExerciseData);
+                    var root = doc.RootElement;
+                    
+                    if (root.TryGetProperty("availableExercises", out var exercises))
+                    {
+                        var exerciseNames = new List<string>();
+                        foreach (var exercise in exercises.EnumerateArray())
+                        {
+                            if (exercise.TryGetProperty("name", out var name))
+                            {
+                                exerciseNames.Add(name.GetString() ?? "Exercício");
+                            }
+                        }
+                        
+                        if (exerciseNames.Count > 0)
+                        {
+                            exerciseDetails = $"Exercícios disponíveis: {string.Join(", ", exerciseNames)}";
+                        }
+                    }
+                }
+                catch
+                {
+                    // Se falhar no parsing, usar descrição genérica
+                    exerciseDetails = "Vários exercícios estão disponíveis no sistema";
+                }
             }
 
             // 2. Gerar UI de fallback com os exercícios recuperados
