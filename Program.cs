@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel.Connectors.Google;
 using SkOfflineCourse.Infra;
 using SkOfflineCourse.TestPrograms;
 using SkOfflineCourse.Plugins;
+using SkOfflineCourse;
 using System.Text;
 using DotNetEnv;
 
@@ -88,6 +89,12 @@ async Task RunWellHubSystem()
     }
 
     var kernel = kernelBuilder.Build();
+
+    // Registrar o TrainiacCorrectionPlugin conforme Issue #11
+    var correctionPlugin = new TrainiacCorrectionPlugin(kernel);
+    kernel.ImportPluginFromObject(correctionPlugin, "TrainiacCorrection");
+    
+    Console.WriteLine("TrainiacCorrectionPlugin registrado no Kernel com sucesso!");
 
     // Inicializa o sistema de login
     var loginManager = new UserLoginManager(kernel);

@@ -42,6 +42,211 @@ public class TrainiacCorrectionPlugin
         _kernel = kernel;
     }
 
+    // ============ FUNÇÕES DA ISSUE #11 ============
+
+    [KernelFunction, Description("Salva backup da sessão do usuário")]
+    public async Task<string> SaveSessionBackup(
+        [Description("ID do usuário")] string userId, 
+        [Description("Passo atual do treino")] string currentStep)
+    {
+        try
+        {
+            Console.WriteLine($"💾 Salvando backup da sessão - User: {userId}, Step: {currentStep}");
+            
+            var backupData = new
+            {
+                userId = userId,
+                currentStep = currentStep,
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                sessionId = Guid.NewGuid().ToString()
+            };
+
+            // Chamar endpoint de backup no Mock (Issue 1)
+            var response = await _httpClient.PostAsync(
+                $"{_baseUrl}/backup/session", 
+                new StringContent(JsonSerializer.Serialize(backupData), System.Text.Encoding.UTF8, "application/json"));
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"✅ Backup salvo com sucesso para {userId}");
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = "Backup da sessão salvo com sucesso",
+                    backupId = backupData.sessionId,
+                    userId = userId,
+                    currentStep = currentStep
+                }, JsonOptions);
+            }
+            else
+            {
+                Console.WriteLine($"⚠️ Erro HTTP ao salvar backup: {response.StatusCode}");
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    message = $"Erro ao salvar backup: HTTP {response.StatusCode}",
+                    userId = userId
+                }, JsonOptions);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao salvar backup: {ex.Message}");
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                message = $"Erro ao salvar backup: {ex.Message}",
+                userId = userId
+            }, JsonOptions);
+        }
+    }
+
+    [KernelFunction, Description("Gera interface de fallback amigável e motivacional para erros")]
+    public async Task<string> GenerateFallbackUI(
+        [Description("Detalhes do exercício")] string exerciseDetails,
+        [Description("Tipo do erro ocorrido")] string errorType)
+    {
+        try
+        {
+            Console.WriteLine($"🎯 Gerando fallback UI - Exercício: {exerciseDetails}, Erro: {errorType}");
+            
+            // Simular delay de processamento LLM
+            await Task.Delay(800);
+            
+            // Gerar conteúdo de fallback baseado no tipo de erro
+            var fallbackContent = errorType.ToUpper() switch
+            {
+                "CONNECTION_ERROR" => GenerateConnectionErrorFallback(exerciseDetails),
+                "DEVICE_ERROR" => GenerateDeviceErrorFallback(exerciseDetails),
+                "USER_NOT_FOUND" => GenerateUserNotFoundFallback(exerciseDetails),
+                "SYNC_ERROR" => GenerateSyncErrorFallback(exerciseDetails),
+                _ => GenerateGenericErrorFallback(exerciseDetails, errorType)
+            };
+
+            var result = new
+            {
+                success = true,
+                errorType = errorType,
+                exerciseDetails = exerciseDetails,
+                fallbackUI = fallbackContent,
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+            };
+
+            Console.WriteLine("✅ Fallback UI gerado com sucesso!");
+            return JsonSerializer.Serialize(result, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao gerar fallback UI: {ex.Message}");
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                message = $"Erro ao gerar fallback UI: {ex.Message}",
+                errorType = errorType
+            }, JsonOptions);
+        }
+    }
+
+    // ============ FUNÇÕES AUXILIARES PARA FALLBACK UI ============
+
+    private string GenerateConnectionErrorFallback(string exerciseDetails)
+    {
+        return $@"🌐 **Ops! Problema de Conexão**
+
+Não se preocupe! Mesmo sem conexão, você pode continuar seu treino:
+
+**📋 Plano B para: {exerciseDetails}**
+
+💪 **Alternativa Offline:**
+• Faça os movimentos com foco na forma correta
+• Conte as repetições mentalmente  
+• Use um cronômetro no seu celular
+• Mantenha o ritmo respiratório constante
+
+🎯 **Dica Motivacional:**
+Grandes atletas treinam em qualquer condição! Sua determinação é mais importante que qualquer tecnologia. Continue firme! 
+
+⚡ **Quando a conexão voltar:**
+Seus dados serão sincronizados automaticamente. Foque no treino agora!";
+    }
+
+    private string GenerateDeviceErrorFallback(string exerciseDetails)
+    {
+        return $@"📱 **Problema no Dispositivo? Sem Problema!**
+
+**🎯 Treino Adaptado para: {exerciseDetails}**
+
+🏃‍♂️ **Modo Manual Ativado:**
+• Conte as repetições em voz alta
+• Use gestos para marcar séries completas
+• Descanse 30-60 segundos entre séries
+• Mantenha a intensidade alta
+
+💡 **Transforme o Obstáculo em Oportunidade:**
+Este é o momento perfeito para se conectar mais com seu corpo! Sinta cada movimento, cada respiração. Você está mais forte do que imagina!
+
+✨ **Resultado Garantido:**
+Treino manual = Mais consciência corporal = Melhor performance!";
+    }
+
+    private string GenerateUserNotFoundFallback(string exerciseDetails)
+    {
+        return $@"👤 **Vamos Recomeçar Juntos!**
+
+**🌟 Seu Treino Personalizado: {exerciseDetails}**
+
+🎯 **Plano de Emergência:**
+• Comece com aquecimento leve (2-3 min)
+• Execute os movimentos básicos
+• Aumente a intensidade gradualmente
+• Finalize com alongamento
+
+💪 **Mensagem Especial:**
+Cada novo começo é uma oportunidade de ser melhor! Não importa onde você parou, o que importa é que você está aqui, pronto para evoluir!
+
+🚀 **Seu Potencial é Infinito:**
+Acredite em você mesmo. Cada repetição é um passo em direção à sua melhor versão!";
+    }
+
+    private string GenerateSyncErrorFallback(string exerciseDetails)
+    {
+        return $@"🔄 **Sincronização em Progresso...**
+
+**⏳ Enquanto isso, continue seu treino: {exerciseDetails}**
+
+🎪 **Modo Offline Ativado:**
+• Seus dados estão sendo preservados
+• Continue normalmente seu treino
+• Tudo será sincronizado em breve
+
+🌟 **Foque no Que Importa:**
+A tecnologia é apenas uma ferramenta. O verdadeiro poder está em VOCÊ! Sua disciplina, sua determinação, sua força de vontade.
+
+💫 **Mantra do Dia:**
+'Eu sou mais forte que qualquer obstáculo técnico!'";
+    }
+
+    private string GenerateGenericErrorFallback(string exerciseDetails, string errorType)
+    {
+        return $@"⚡ **Superando Desafios Técnicos!**
+
+**🎯 Exercício em Foco: {exerciseDetails}**
+**🔧 Situação: {errorType}**
+
+💪 **Seu Treino Não Para:**
+• Mantenha o foco no exercício
+• Confie na sua experiência
+• Use sua determinação como guia
+• Celebrate cada movimento
+
+🏆 **Lembre-se:**
+Champions não param por problemas técnicos! Eles se adaptam, superam e ficam ainda mais fortes. Você é um champion!
+
+✨ **Transforme o Problema em Poder:**
+Cada obstáculo superado te torna mais resiliente. Continue em frente!";
+    }
+
     [KernelFunction, Description("Verifica status de treino com correção automática de erros")]
     public async Task<string> GetTrainingStatusWithAutoCorrection(
         [Description("ID do usuario para verificar o status")] string userId)
