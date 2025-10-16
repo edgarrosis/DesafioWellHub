@@ -31,7 +31,6 @@ Console.WriteLine("Escolha qual sistema deseja executar:");
 Console.WriteLine();
 Console.WriteLine("1. WellHub Check-in");
 Console.WriteLine("2. Trainiac System");
-Console.WriteLine("3. 🧪 Demonstração Issue #11 - Plugin de Correção");
 Console.WriteLine("0. Sair");
 Console.WriteLine();
 Console.Write("Digite sua opcao: ");
@@ -46,10 +45,6 @@ switch (choice)
     
     case "2":
         await RunTrainiacSystem();
-        break;
-    
-    case "3":
-        await TestIssue11.RunDemonstration();
         break;
     
     case "0":
