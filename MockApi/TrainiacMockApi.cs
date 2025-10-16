@@ -149,6 +149,9 @@ public class TrainiacMockApi
     {
         if (_isRunning) return;
 
+        // Aguardar inicialização completa
+        await Task.Delay(10);
+
         try
         {
             _listener.Start();

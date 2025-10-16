@@ -315,6 +315,9 @@ public class TrainiacDataPlugin
     [KernelFunction, Description("Obtem uma lista de todos os exercicios disponiveis")]
     public async Task<string> GetAvailableExercises()
     {
+        // Simular consulta assíncrona ao banco de dados
+        await Task.Delay(50);
+        
         var exercises = new[]
         {
             new { exerciseId = "musc_001", name = "Musculacao Completa", difficulty = "Intermediario" },
