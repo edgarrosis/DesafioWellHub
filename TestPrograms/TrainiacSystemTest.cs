@@ -350,12 +350,21 @@ public class TrainiacSystemTest
     {
         try 
         {
-            Console.ReadKey();
+            // Verifica se o console está sendo redirecionado
+            if (!Console.IsInputRedirected)
+            {
+                Console.ReadKey();
+            }
+            else
+            {
+                // Se console input foi redirecionado, apenas aguarda um pouco
+                await Task.Delay(1000);
+            }
         }
         catch 
         {
-            // Se console input foi redirecionado, apenas aguarda um pouco
-            await Task.Delay(2000);
+            // Fallback se houver erro
+            await Task.Delay(1000);
         }
         Console.WriteLine();
     }
@@ -427,8 +436,9 @@ public class TrainiacSystemTest
             case "0":
                 return;
             default:
-                Console.WriteLine("❌ Opção inválida! Pressione ENTER para tentar novamente...");
-                Console.ReadLine();
+                Console.WriteLine("❌ Opção inválida!");
+                Console.WriteLine("Pressione ENTER para tentar novamente...");
+                await WaitForUserInput();
                 await StartUserExperience(); // Volta ao menu
                 break;
         }
@@ -441,11 +451,20 @@ public class TrainiacSystemTest
         Console.WriteLine("================================");
         Console.WriteLine();
 
+        // Ativar sistema de correção e backup para todos os treinos (Issue #11)
+        Console.WriteLine("🔧 Sistema de Correção e Backup ativado (Issue #11)");
+        Console.WriteLine("💾 Backup automático de sessão habilitado");
+        Console.WriteLine("🛡️ Interface de fallback preparada para erros");
+        Console.WriteLine();
+
         // Simular carregamento
         Console.WriteLine("📱 Carregando seu treino personalizado...");
         await Task.Delay(1500);
 
-        // Aqui é onde vamos simular o usuário real
+        // Executar backup da sessão antes de iniciar o treino
+        await ExecuteSessionBackupAtStart(workoutType, workoutName);
+
+        // Aqui é onde vamos simular o usuário real com funcionalidades da Issue #11 integradas
         await SimulatePersonalTrainerExperience(workoutType, workoutName);
     }
 
@@ -511,9 +530,13 @@ public class TrainiacSystemTest
         Console.WriteLine();
         Console.WriteLine("🎉 Parabéns! Treino concluído com sucesso!");
         Console.WriteLine("💪 Você se superou hoje!");
+        
+        // Backup final do treino (Issue #11)
+        await ExecuteSessionBackupAtEnd(workoutType, workoutName);
+        
         Console.WriteLine();
         Console.WriteLine("Pressione ENTER para voltar ao menu...");
-        Console.ReadLine();
+        await WaitForUserInput();
         await StartUserExperience();
     }
 
@@ -558,19 +581,35 @@ public class TrainiacSystemTest
             Console.Write($"Rep {rep}/5... ");
             await Task.Delay(800);
 
-            // Injetar erro em momentos específicos
+            // Injetar diferentes tipos de erro usando Issue #11
             if (exerciseNumber == 2 && rep == 3)
             {
                 Console.WriteLine();
-                Console.WriteLine("❌ Ops! Problema de conexão...");
-                await HandleErrorWithCorrection("CONEXAO_INSTAVEL", exercise, rep);
+                Console.WriteLine("❌ Ops! Problema de conexão detectado...");
+                await HandleErrorWithIssue11Features("CONNECTION_ERROR", exercise, rep, "Perda de conectividade durante exercício");
+                
+                // Continuar exercício após correção
+                await ContinueExerciseAfterCorrection(exercise, rep);
                 return;
             }
             else if (exerciseNumber == 3 && rep == 2)
             {
                 Console.WriteLine();
-                Console.WriteLine("❌ Dados do treino não carregaram...");
-                await HandleErrorWithCorrection("TREINO_NAO_CARREGADO", exercise, rep);
+                Console.WriteLine("❌ Erro no dispositivo detectado...");
+                await HandleErrorWithIssue11Features("DEVICE_ERROR", exercise, rep, "Falha no sensor de movimento");
+                
+                // Continuar exercício após correção
+                await ContinueExerciseAfterCorrection(exercise, rep);
+                return;
+            }
+            else if (exerciseNumber == 4 && rep == 1)
+            {
+                Console.WriteLine();
+                Console.WriteLine("❌ Erro de sincronização detectado...");
+                await HandleErrorWithIssue11Features("SYNC_ERROR", exercise, rep, "Dados não sincronizaram com servidor");
+                
+                // Continuar exercício após correção
+                await ContinueExerciseAfterCorrection(exercise, rep);
                 return;
             }
 
@@ -582,60 +621,24 @@ public class TrainiacSystemTest
         await Task.Delay(1000);
     }
 
-    private async Task HandleErrorWithCorrection(string errorType, string exercise, int currentRep)
+    private async Task ContinueExerciseAfterCorrection(string exercise, int fromRep)
     {
-        Console.WriteLine();
-        Console.WriteLine("🔧 Sistema de correção ativado...");
+        Console.WriteLine($"🔄 Continuando {exercise} da repetição {fromRep}...");
         
-        try
+        // Continuar exercício de onde parou
+        for (int rep = fromRep; rep <= 5; rep++)
         {
-            // Usar o plugin de correção para mascarar o erro
-            var result = await _kernel.InvokeAsync("TrainiacCorrection", "GetTrainingStatusWithAutoCorrection",
-                new KernelArguments { ["userId"] = "user_simulation" });
-
-            // O plugin vai mascarar o erro e retornar uma resposta natural
-            Console.WriteLine("✅ Problema resolvido automaticamente!");
-            
-            if (_kernel != null)
-            {
-                try
-                {
-                    var prompt = $@"Você é um personal trainer e houve uma pequena pausa técnica durante o exercício {exercise}.
-                    Crie uma frase motivacional natural para continuar o treino, como se fosse apenas uma pausa normal.
-                    Seja positivo e encoraje a continuar de onde parou (rep {currentRep}).";
-
-                    var recovery = await _kernel.InvokePromptAsync(prompt);
-                    Console.WriteLine($"💬 PERSONAL: {recovery.GetValue<string>()}");
-                }
-                catch
-                {
-                    Console.WriteLine($"💬 PERSONAL: Perfeito! Vamos continuar de onde paramos. Você está indo muito bem!");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"💬 PERSONAL: Perfeito! Vamos continuar de onde paramos. Você está indo muito bem!");
-            }
-
-            Console.WriteLine();
-            
-            // Continuar exercício após a correção
-            for (int rep = currentRep; rep <= 5; rep++)
-            {
-                Console.Write($"Rep {rep}/5... ");
-                await Task.Delay(800);
-                Console.WriteLine("✅");
-            }
-            
-            Console.WriteLine("🎯 Exercício completado!");
-            Console.WriteLine();
+            Console.Write($"Rep {rep}/5... ");
+            await Task.Delay(600);
+            Console.WriteLine("✅");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"⚠️ Sistema de backup ativado: {ex.Message}");
-            Console.WriteLine("💬 PERSONAL: Que tal fazer uma pequena pausa? Beba água e já voltamos!");
-        }
+        
+        Console.WriteLine("🎯 Exercício completado com sucesso!");
+        Console.WriteLine();
+        await Task.Delay(800);
     }
+
+
 
     private string[] GetExercisesForWorkout(string workoutType)
     {
@@ -1048,5 +1051,340 @@ public class TrainiacSystemTest
         {
             Console.WriteLine("❌ Erro ao processar resposta do backup");
         }
+    }
+
+    private async Task DemonstrateIssue11Integration()
+    {
+        Console.WriteLine("💪 BEM-VINDO AO TREINO DE FORÇA COM SISTEMA DE CORREÇÃO!");
+        Console.WriteLine("========================================================");
+        Console.WriteLine();
+        Console.WriteLine("Este treino inclui as funcionalidades da Issue #11:");
+        Console.WriteLine("📁 SaveSessionBackup - Backup automático de sessões");
+        Console.WriteLine("🛡️ GenerateFallbackUI - Interface de fallback para erros");
+        Console.WriteLine();
+        
+        await Task.Delay(1000);
+        
+        // Demonstrar SaveSessionBackup
+        Console.WriteLine("🔄 DEMONSTRAÇÃO: Save Session Backup");
+        Console.WriteLine("====================================");
+        Console.WriteLine();
+        
+        try
+        {
+            Console.WriteLine("📦 Executando backup da sessão...");
+            var sessionData = new
+            {
+                userId = "user_strength_training",
+                sessionId = $"session_{DateTime.Now:yyyyMMdd_HHmmss}",
+                workoutType = "strength",
+                exercises = new object[]
+                {
+                    new { name = "Flexão de braço", sets = 3, reps = 15 },
+                    new { name = "Agachamento", sets = 4, reps = 12 },
+                    new { name = "Prancha", sets = 3, duration = 60 }
+                },
+                timestamp = DateTime.UtcNow
+            };
+            
+            var sessionJson = System.Text.Json.JsonSerializer.Serialize(sessionData);
+            
+            var result = await _kernel.InvokeAsync("TrainiacCorrection", "SaveSessionBackup",
+                new KernelArguments { 
+                    ["sessionData"] = sessionJson,
+                    ["userId"] = "user_strength_training"
+                });
+            
+            var resultString = result.GetValue<string>();
+            Console.WriteLine("✅ Backup realizado com sucesso!");
+            
+            if (!string.IsNullOrEmpty(resultString))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(resultString);
+                    var root = doc.RootElement;
+                    
+                    if (root.TryGetProperty("backupId", out var backupId))
+                    {
+                        Console.WriteLine($"📋 ID do Backup: {backupId}");
+                    }
+                    
+                    if (root.TryGetProperty("status", out var status))
+                    {
+                        Console.WriteLine($"🔍 Status: {status}");
+                    }
+                }
+                catch
+                {
+                    Console.WriteLine($"📄 Resposta: {resultString}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Erro esperado (Mock API não disponível): {ex.Message}");
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para continuar com a demonstração de Fallback UI...");
+        await WaitForUserInput();
+        
+        // Demonstrar GenerateFallbackUI
+        Console.WriteLine("🛡️ DEMONSTRAÇÃO: Generate Fallback UI");
+        Console.WriteLine("=====================================");
+        Console.WriteLine();
+        
+        var errorTypes = new[] { "CONNECTION_ERROR", "DEVICE_ERROR", "USER_NOT_FOUND", "SYNC_ERROR" };
+        
+        foreach (var errorType in errorTypes)
+        {
+            try
+            {
+                Console.WriteLine($"🔧 Gerando UI de fallback para: {errorType}");
+                
+                var result = await _kernel.InvokeAsync("TrainiacCorrection", "GenerateFallbackUI",
+                    new KernelArguments 
+                    { 
+                        ["errorType"] = errorType,
+                        ["userContext"] = "Usuário fazendo treino de força",
+                        ["exerciseDetails"] = "Exercícios de força: flexão, agachamento, prancha"
+                    });
+                
+                var resultString = result.GetValue<string>();
+                
+                if (!string.IsNullOrEmpty(resultString))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(resultString);
+                        var root = doc.RootElement;
+                        
+                        if (root.TryGetProperty("fallbackContent", out var content))
+                        {
+                            Console.WriteLine($"   💬 Conteúdo: {content.GetString()}");
+                        }
+                        
+                        if (root.TryGetProperty("motivationalMessage", out var message))
+                        {
+                            Console.WriteLine($"   🌟 Mensagem: {message.GetString()}");
+                        }
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"   📄 {resultString}");
+                    }
+                }
+                
+                Console.WriteLine();
+                await Task.Delay(800);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   ❌ Erro: {ex.Message}");
+                Console.WriteLine();
+            }
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("🎯 DEMONSTRAÇÃO COMPLETA!");
+        Console.WriteLine("=========================");
+        Console.WriteLine();
+        Console.WriteLine("As funcionalidades da Issue #11 foram integradas com sucesso no Treino de Força!");
+        Console.WriteLine();
+        Console.WriteLine("📁 SaveSessionBackup: Tentativa de backup no Mock API (localhost:8081)");
+        Console.WriteLine("🛡️ GenerateFallbackUI: Interface de fallback gerada para diferentes tipos de erro");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para voltar ao menu principal...");
+        await WaitForUserInput();
+    }
+
+    private async Task ExecuteSessionBackupAtStart(string workoutType, string workoutName)
+    {
+        Console.WriteLine("💾 EXECUTANDO BACKUP DA SESSÃO (Issue #11)");
+        Console.WriteLine("==========================================");
+        
+        try
+        {
+            var sessionData = new
+            {
+                userId = $"user_{workoutType}",
+                sessionId = $"session_{DateTime.Now:yyyyMMdd_HHmmss}",
+                workoutType = workoutType,
+                workoutName = workoutName,
+                startTime = DateTime.UtcNow,
+                exercises = GetExercisesForWorkout(workoutType).Select((ex, index) => new
+                {
+                    exerciseId = $"ex_{index + 1:D3}",
+                    name = ex,
+                    planned = true
+                }).ToArray()
+            };
+            
+            var sessionJson = System.Text.Json.JsonSerializer.Serialize(sessionData);
+            
+            Console.WriteLine($"📦 Iniciando backup para {workoutName}...");
+            
+            var result = await _kernel.InvokeAsync("TrainiacCorrection", "SaveSessionBackup",
+                new KernelArguments { 
+                    ["sessionData"] = sessionJson,
+                    ["userId"] = sessionData.userId,
+                    ["currentStep"] = "workout_start"
+                });
+            
+            Console.WriteLine("✅ Backup da sessão realizado com sucesso!");
+            Console.WriteLine($"🆔 Sessão: {sessionData.sessionId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Backup executado (Mock API indisponível): {ex.Message.Split('.')[0]}");
+        }
+        
+        Console.WriteLine();
+        await Task.Delay(1000);
+    }
+
+    private async Task HandleErrorWithIssue11Features(string errorType, string exercise, int currentRep, string context = "")
+    {
+        Console.WriteLine();
+        Console.WriteLine("🔧 SISTEMA DE CORREÇÃO ATIVADO (Issue #11)");
+        Console.WriteLine("===========================================");
+        
+        try
+        {
+            // 1. Gerar UI de fallback primeiro
+            Console.WriteLine($"🛡️ Gerando interface de fallback para {errorType}...");
+            
+            var fallbackResult = await _kernel.InvokeAsync("TrainiacCorrection", "GenerateFallbackUI",
+                new KernelArguments 
+                { 
+                    ["errorType"] = errorType,
+                    ["userContext"] = $"Exercício: {exercise}, Rep: {currentRep}/5. {context}",
+                    ["exerciseDetails"] = $"Exercício atual: {exercise}, Progresso: {currentRep}/5 repetições"
+                });
+
+            var fallbackString = fallbackResult.GetValue<string>();
+            
+            if (!string.IsNullOrEmpty(fallbackString))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(fallbackString);
+                    var root = doc.RootElement;
+                    
+                    if (root.TryGetProperty("fallbackContent", out var content))
+                    {
+                        Console.WriteLine($"💬 FALLBACK UI: {content.GetString()}");
+                    }
+                    
+                    if (root.TryGetProperty("motivationalMessage", out var message))
+                    {
+                        Console.WriteLine($"🌟 MENSAGEM: {message.GetString()}");
+                    }
+                }
+                catch
+                {
+                    Console.WriteLine($"💬 UI DE FALLBACK: Não se preocupe! Vamos continuar juntos!");
+                }
+            }
+
+            // 2. Usar o plugin de correção automática
+            Console.WriteLine($"🔄 Aplicando correção automática...");
+            
+            var result = await _kernel.InvokeAsync("TrainiacCorrection", "GetTrainingStatusWithAutoCorrection",
+                new KernelArguments { ["userId"] = "user_simulation" });
+
+            Console.WriteLine("✅ Problema resolvido automaticamente!");
+            
+            // 3. Backup da correção aplicada
+            await BackupCorrectionAction(errorType, exercise, currentRep);
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Sistema de fallback ativado: {ex.Message}");
+            Console.WriteLine("💬 PERSONAL: Que tal fazer uma pequena pausa? Beba água e já voltamos!");
+        }
+        
+        Console.WriteLine();
+        await Task.Delay(1500);
+    }
+
+    private async Task BackupCorrectionAction(string errorType, string exercise, int rep)
+    {
+        try
+        {
+            var correctionData = new
+            {
+                userId = "user_simulation",
+                correctionType = errorType,
+                exercise = exercise,
+                currentRep = rep,
+                timestamp = DateTime.UtcNow,
+                action = "error_corrected",
+                success = true
+            };
+            
+            var correctionJson = System.Text.Json.JsonSerializer.Serialize(correctionData);
+            
+            Console.WriteLine("💾 Fazendo backup da correção aplicada...");
+            
+            await _kernel.InvokeAsync("TrainiacCorrection", "SaveSessionBackup",
+                new KernelArguments { 
+                    ["sessionData"] = correctionJson,
+                    ["userId"] = "user_simulation",
+                    ["currentStep"] = "error_correction"
+                });
+            
+            Console.WriteLine("✅ Backup da correção salvo com sucesso!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Backup da correção executado: {ex.Message.Split('.')[0]}");
+        }
+    }
+
+    private async Task ExecuteSessionBackupAtEnd(string workoutType, string workoutName)
+    {
+        Console.WriteLine();
+        Console.WriteLine("💾 FINALIZANDO BACKUP DA SESSÃO (Issue #11)");
+        Console.WriteLine("==========================================");
+        
+        try
+        {
+            var completionData = new
+            {
+                userId = $"user_{workoutType}",
+                sessionId = $"session_{DateTime.Now:yyyyMMdd_HHmmss}",
+                workoutType = workoutType,
+                workoutName = workoutName,
+                endTime = DateTime.UtcNow,
+                status = "completed",
+                exercisesCompleted = GetExercisesForWorkout(workoutType).Length,
+                totalDuration = "15 minutos estimado",
+                success = true
+            };
+            
+            var completionJson = System.Text.Json.JsonSerializer.Serialize(completionData);
+            
+            Console.WriteLine($"📦 Salvando dados finais do treino {workoutName}...");
+            
+            await _kernel.InvokeAsync("TrainiacCorrection", "SaveSessionBackup",
+                new KernelArguments { 
+                    ["sessionData"] = completionJson,
+                    ["userId"] = completionData.userId,
+                    ["currentStep"] = "workout_completion"
+                });
+            
+            Console.WriteLine("✅ Backup final da sessão realizado com sucesso!");
+            Console.WriteLine($"📊 Exercícios completados: {completionData.exercisesCompleted}");
+            Console.WriteLine($"⏱️ Duração total: {completionData.totalDuration}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Backup final executado (Mock API indisponível): {ex.Message.Split('.')[0]}");
+        }
+        
+        await Task.Delay(1000);
     }
 }

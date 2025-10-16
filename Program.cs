@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel.Connectors.Google;
 using SkOfflineCourse.Infra;
 using SkOfflineCourse.TestPrograms;
 using SkOfflineCourse.Plugins;
+using SkOfflineCourse;
 using System.Text;
 using DotNetEnv;
 
@@ -30,6 +31,7 @@ Console.WriteLine("Escolha qual sistema deseja executar:");
 Console.WriteLine();
 Console.WriteLine("1. WellHub Check-in");
 Console.WriteLine("2. Trainiac System");
+Console.WriteLine("3. 🧪 Demonstração Issue #11 - Plugin de Correção");
 Console.WriteLine("0. Sair");
 Console.WriteLine();
 Console.Write("Digite sua opcao: ");
@@ -44,6 +46,10 @@ switch (choice)
     
     case "2":
         await RunTrainiacSystem();
+        break;
+    
+    case "3":
+        await TestIssue11.RunDemonstration();
         break;
     
     case "0":
@@ -88,6 +94,12 @@ async Task RunWellHubSystem()
     }
 
     var kernel = kernelBuilder.Build();
+
+    // Registrar o TrainiacCorrectionPlugin conforme Issue #11
+    var correctionPlugin = new TrainiacCorrectionPlugin(kernel);
+    kernel.ImportPluginFromObject(correctionPlugin, "TrainiacCorrection");
+    
+    Console.WriteLine("TrainiacCorrectionPlugin registrado no Kernel com sucesso!");
 
     // Inicializa o sistema de login
     var loginManager = new UserLoginManager(kernel);
