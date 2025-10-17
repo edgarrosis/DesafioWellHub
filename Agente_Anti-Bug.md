@@ -31,11 +31,11 @@ O agente atua de forma proativa, transformando falhas críticas em suporte imedi
 
 - Principais Métodos:
 
-GetActiveSessionStatus(userId): Retorna o estado atual do treino do usuário.
+    GetActiveSessionStatus(userId): Retorna o estado atual do treino do usuário.
 
-GetExerciseDetails(exerciseId): Busca detalhes dos exercícios disponíveis.
+    GetExerciseDetails(exerciseId): Busca detalhes dos exercícios disponíveis.
 
-BackupTrainingData(trainingData): Realiza o backup automático das informações de treino.
+    BackupTrainingData(trainingData): Realiza o backup automático das informações de treino.
 
 - Integração: Conectado à API Mock TrainiacMockApi.cs.
 
@@ -45,11 +45,11 @@ BackupTrainingData(trainingData): Realiza o backup automático das informações
 
 - Principais Métodos:
 
-SaveSessionBackup(userId, currentStep) — envia backup ao endpoint
+    SaveSessionBackup(userId, currentStep) — envia backup ao endpoint
 
-GenerateFallbackUI(exerciseDetails, errorType) — cria UI textual de fallback para o usuário.
+    GenerateFallbackUI(exerciseDetails, errorType) — cria UI textual de fallback para o usuário.
 
-GetTrainingStatusWithAutoCorrection(userId) — consulta status e aplica correções automáticas (usa cache e handlers internos).
+    GetTrainingStatusWithAutoCorrection(userId) — consulta status e aplica correções automáticas (usa cache e handlers internos).
 
 - Integração direta com o kernel para decisões baseadas em IA (planejamento e execução).
 
@@ -91,7 +91,9 @@ Garantia de que nenhuma informação do treino seja perdida, mesmo em falhas té
 Exemplo de operação:
 
 🔄 Aplicando correção automática...
+
 🔍 Verificando status do treino... SUCCESS
+
 💾 Backup salvo com sucesso!
 
 ### ⚙️ Como o Agente usa os dados
