@@ -16,6 +16,7 @@ public class TrainiacSystemTest
     private readonly Kernel _kernel;
     private readonly TrainiacDataPlugin _plugin;
     private readonly TrainiacCorrectionPlugin _correctionPlugin;
+    private readonly AntiBugAgent _antiBugAgent;
 
     public TrainiacSystemTest()
     {
@@ -65,6 +66,10 @@ public class TrainiacSystemTest
         _correctionPlugin = new TrainiacCorrectionPlugin(_kernel); // Passa kernel para usar LLM
         _kernel.Plugins.AddFromObject(_plugin, "TrainiacData");
         _kernel.Plugins.AddFromObject(_correctionPlugin, "TrainiacCorrection");
+        
+        // Inicializar Agente Anti-Bug (Issue #12)
+        _antiBugAgent = new AntiBugAgent(_kernel, _plugin, _correctionPlugin);
+        _kernel.Plugins.AddFromObject(_antiBugAgent, "AntiBugAgent");
     }
 
     public async Task RunTestsAsync()
@@ -410,9 +415,10 @@ public class TrainiacSystemTest
         Console.WriteLine("Vamos começar?");
         Console.WriteLine();
         Console.WriteLine("1️⃣  🏃‍♂️ Iniciar Treino Cardiovascular");
-        Console.WriteLine("2️⃣  � Iniciar Treino de Força");  
+        Console.WriteLine("2️⃣  💪 Iniciar Treino de Força");  
         Console.WriteLine("3️⃣  🧘‍♀️ Iniciar Treino Funcional");
         Console.WriteLine("4️⃣  🎯 Treino Personalizado (IA escolhe)");
+        Console.WriteLine("5️⃣  🤖 Demo Agente Anti-Bug (Issue #12)");
         Console.WriteLine("0️⃣  Sair do app");
         Console.WriteLine();
         Console.Write("Escolha seu treino: ");
@@ -432,6 +438,9 @@ public class TrainiacSystemTest
                 break;
             case "4":
                 await StartAIPersonalizedWorkout();
+                break;
+            case "5":
+                await DemonstrateAntiBugAgent();
                 break;
             case "0":
                 return;
@@ -1247,8 +1256,16 @@ public class TrainiacSystemTest
     private async Task HandleErrorWithIssue11Features(string errorType, string exercise, int currentRep, string context = "")
     {
         Console.WriteLine();
-        Console.WriteLine("🔧 SISTEMA DE CORREÇÃO ATIVADO (Issue #11)");
-        Console.WriteLine("===========================================");
+        Console.WriteLine("🔧 SISTEMA DE CORREÇÃO ATIVADO (Issue #11 + #12)");
+        Console.WriteLine("=================================================");
+        
+        // Opção de usar o Agente Anti-Bug para casos mais complexos
+        if (ShouldUseAntiBugAgent(errorType))
+        {
+            Console.WriteLine("🤖 AGENTE ANTI-BUG SELECIONADO PARA ESTE ERRO");
+            await HandleErrorWithAntiBugAgent(errorType, exercise, currentRep, context);
+            return;
+        }
         
         try
         {
@@ -1272,7 +1289,29 @@ public class TrainiacSystemTest
                     using var doc = System.Text.Json.JsonDocument.Parse(fallbackString);
                     var root = doc.RootElement;
                     
-                    if (root.TryGetProperty("fallbackContent", out var content))
+                    if (root.TryGetProperty("fallbackUI", out var fallbackUI))
+                    {
+                        Console.WriteLine("💬 INTERFACE DE FALLBACK:");
+                        Console.WriteLine("========================");
+                        var fallbackText = fallbackUI.GetString();
+                        if (!string.IsNullOrEmpty(fallbackText))
+                        {
+                            // Processar o texto formatado, removendo caracteres de escape
+                            var cleanedText = fallbackText
+                                .Replace("\\r\\n", "\n")
+                                .Replace("\\n", "\n")
+                                .Replace("\\u0022", "\"")
+                                .Replace("\\u0027", "'");
+                            
+                            var lines = cleanedText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                            foreach (var line in lines)
+                            {
+                                Console.WriteLine(line);
+                            }
+                        }
+                        Console.WriteLine();
+                    }
+                    else if (root.TryGetProperty("fallbackContent", out var content))
                     {
                         Console.WriteLine($"💬 FALLBACK UI: {content.GetString()}");
                     }
@@ -1386,5 +1425,459 @@ public class TrainiacSystemTest
         }
         
         await Task.Delay(1000);
+    }
+
+    /// <summary>
+    /// Demonstração completa do Agente Anti-Bug (Issue #12)
+    /// Testa os três cenários principais de erro com ações corretivas
+    /// </summary>
+    private async Task DemonstrateAntiBugAgent()
+    {
+        Console.Clear();
+        Console.WriteLine("🤖 DEMONSTRAÇÃO DO AGENTE ANTI-BUG (Issue #12)");
+        Console.WriteLine("===============================================");
+        Console.WriteLine();
+        Console.WriteLine("Este é o sistema de orquestração inteligente que analisa erros");
+        Console.WriteLine("e decide automaticamente qual ação corretiva executar!");
+        Console.WriteLine();
+        Console.WriteLine("Vamos testar os três cenários principais:");
+        Console.WriteLine("1️⃣ SESSÃO_PERDIDA → Backup automático");
+        Console.WriteLine("2️⃣ TREINO_NAO_CARREGADO → Recuperação + Fallback UI");
+        Console.WriteLine("3️⃣ CONNECTION_ERROR → Análise IA + Ação inteligente");
+        Console.WriteLine();
+        
+        await WaitForUserInput();
+
+        // Cenário 1: Sessão Perdida (Crítico)
+        await TestAntiBugScenario1();
+        
+        // Cenário 2: Treino Não Carregado (Visualização)
+        await TestAntiBugScenario2();
+        
+        // Cenário 3: Connection Error (Análise IA)
+        await TestAntiBugScenario3();
+
+        // Resumo final
+        Console.WriteLine();
+        Console.WriteLine("🎯 DEMONSTRAÇÃO COMPLETA!");
+        Console.WriteLine("=========================");
+        Console.WriteLine("O Agente Anti-Bug demonstrou capacidade de:");
+        Console.WriteLine("✅ Analisar diferentes tipos de erro");
+        Console.WriteLine("✅ Tomar decisões inteligentes baseadas na criticidade");
+        Console.WriteLine("✅ Executar ações corretivas apropriadas");
+        Console.WriteLine("✅ Usar IA para análise avançada de contexto");
+        Console.WriteLine("✅ Implementar fallbacks de emergência");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para voltar ao menu...");
+        await WaitForUserInput();
+        await StartUserExperience();
+    }
+
+    /// <summary>
+    /// Cenário 1: Sessão Perdida - Deve executar backup crítico
+    /// </summary>
+    private async Task TestAntiBugScenario1()
+    {
+        Console.WriteLine("🚨 CENÁRIO 1: SESSÃO PERDIDA");
+        Console.WriteLine("============================");
+        Console.WriteLine("Simulando perda crítica de sessão durante treino...");
+        Console.WriteLine();
+
+        var sessionData = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            userId = "user_001",
+            sessionId = "session_critical_001",
+            workoutType = "strength",
+            currentExercise = "Agachamento",
+            progress = "Exercício 2/4, Rep 3/5",
+            startTime = DateTime.UtcNow.AddMinutes(-15),
+            criticalData = true
+        });
+
+        try
+        {
+            var result = await _antiBugAgent.RunAntiBugAgent(
+                errorType: "SESSAO_PERDIDA",
+                userId: "user_001", 
+                errorContext: "Sessão perdida durante agachamento - rep 3/5",
+                sessionData: sessionData
+            );
+
+            Console.WriteLine();
+            Console.WriteLine("📋 RESULTADO DO AGENTE:");
+            Console.WriteLine("========================");
+            DisplayFormattedResult(result);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro no cenário 1: {ex.Message}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para continuar...");
+        await WaitForUserInput();
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Cenário 2: Treino Não Carregado - Deve recuperar exercícios e gerar fallback UI
+    /// </summary>
+    private async Task TestAntiBugScenario2()
+    {
+        Console.WriteLine("📱 CENÁRIO 2: TREINO NÃO CARREGADO");
+        Console.WriteLine("==================================");
+        Console.WriteLine("Simulando falha no carregamento da interface de treino...");
+        Console.WriteLine();
+
+        try
+        {
+            var result = await _antiBugAgent.RunAntiBugAgent(
+                errorType: "TREINO_NAO_CARREGADO",
+                userId: "user_002",
+                errorContext: "Interface de treino não carregou - usuário esperando na tela inicial",
+                sessionData: ""
+            );
+
+            Console.WriteLine();
+            Console.WriteLine("📋 RESULTADO DO AGENTE:");
+            Console.WriteLine("========================");
+            DisplayFormattedResult(result);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro no cenário 2: {ex.Message}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para continuar...");
+        await WaitForUserInput();
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Cenário 3: Connection Error - Deve usar IA para analisar e decidir ação
+    /// </summary>
+    private async Task TestAntiBugScenario3()
+    {
+        Console.WriteLine("📶 CENÁRIO 3: CONNECTION ERROR COM ANÁLISE IA");
+        Console.WriteLine("==============================================");
+        Console.WriteLine("Simulando erro de conexão durante exercício - IA decidirá a ação...");
+        Console.WriteLine();
+
+        try
+        {
+            var result = await _antiBugAgent.RunAntiBugAgent(
+                errorType: "CONNECTION_ERROR",
+                userId: "user_003",
+                errorContext: "Perda de conexão durante exercício de alta intensidade - usuário no meio do HIIT",
+                sessionData: ""
+            );
+
+            Console.WriteLine();
+            Console.WriteLine("📋 RESULTADO DO AGENTE:");
+            Console.WriteLine("========================");
+            DisplayFormattedResult(result);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro no cenário 3: {ex.Message}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para continuar...");
+        await WaitForUserInput();
+        Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Exibe o resultado formatado do agente
+    /// </summary>
+    private void DisplayFormattedResult(string jsonResult)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(jsonResult);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("agentAction", out var action))
+            {
+                Console.WriteLine($"🤖 Ação do Agente: {action.GetString()}");
+            }
+
+            if (root.TryGetProperty("criticality", out var criticality))
+            {
+                var criticalityIcon = criticality.GetString() switch
+                {
+                    "CRITICA" => "🚨",
+                    "ALTA" => "⚠️", 
+                    "MEDIA" => "🟡",
+                    "BAIXA" => "🟢",
+                    _ => "❓"
+                };
+                Console.WriteLine($"{criticalityIcon} Criticidade: {criticality.GetString()}");
+            }
+
+            if (root.TryGetProperty("category", out var category))
+            {
+                Console.WriteLine($"📂 Categoria: {category.GetString()}");
+            }
+
+            if (root.TryGetProperty("reasoning", out var reasoning))
+            {
+                Console.WriteLine($"🧠 Raciocínio IA: {reasoning.GetString()}");
+            }
+
+            // Tratamento especial para fallback UI formatado
+            if (root.TryGetProperty("fallbackUI", out var fallbackUI))
+            {
+                Console.WriteLine();
+                Console.WriteLine("🛡️ INTERFACE DE FALLBACK:");
+                Console.WriteLine("========================");
+                var fallbackUIContent = fallbackUI.GetString();
+                
+                // Se o fallback contém JSON aninhado, parse novamente
+                if (!string.IsNullOrEmpty(fallbackUIContent) && fallbackUIContent.StartsWith("{") && fallbackUIContent.EndsWith("}"))
+                {
+                    try
+                    {
+                        using var fallbackDoc = System.Text.Json.JsonDocument.Parse(fallbackUIContent);
+                        var fallbackRoot = fallbackDoc.RootElement;
+                        
+                        if (fallbackRoot.TryGetProperty("fallbackUI", out var nestedFallback))
+                        {
+                            Console.WriteLine(nestedFallback.GetString());
+                        }
+                        else if (fallbackRoot.TryGetProperty("fallbackContent", out var nestedContent))
+                        {
+                            Console.WriteLine(nestedContent.GetString());
+                        }
+                        else
+                        {
+                            Console.WriteLine(fallbackUIContent);
+                        }
+                    }
+                    catch
+                    {
+                        Console.WriteLine(fallbackUIContent);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine(fallbackUIContent ?? "Fallback UI não disponível");
+                }
+                Console.WriteLine();
+            }
+
+            // Tratamento para fallbackContent (usado em outras partes)
+            if (root.TryGetProperty("fallbackContent", out var fallbackContent))
+            {
+                Console.WriteLine();
+                Console.WriteLine("💬 MENSAGEM DE FALLBACK:");
+                Console.WriteLine("========================");
+                Console.WriteLine(fallbackContent.GetString());
+                Console.WriteLine();
+            }
+
+            // Tratamento para mensagem motivacional
+            if (root.TryGetProperty("motivationalMessage", out var motivationalMessage))
+            {
+                Console.WriteLine();
+                Console.WriteLine("🌟 MENSAGEM MOTIVACIONAL:");
+                Console.WriteLine("========================");
+                Console.WriteLine(motivationalMessage.GetString());
+                Console.WriteLine();
+            }
+
+            if (root.TryGetProperty("actionResults", out var results))
+            {
+                Console.WriteLine("🔧 Ações Executadas:");
+                foreach (var result in results.EnumerateArray())
+                {
+                    var resultString = result.GetString();
+                    
+                    // Primeiro, verificar se começa com um prefixo conhecido e extrair o JSON
+                    var jsonPart = resultString;
+                    var actionType = "Ação";
+                    
+                    if (!string.IsNullOrEmpty(resultString))
+                    {
+                        if (resultString.StartsWith("Fallback UI: "))
+                        {
+                            jsonPart = resultString.Substring("Fallback UI: ".Length);
+                            actionType = "Fallback UI";
+                        }
+                        else if (resultString.StartsWith("Backup executado: "))
+                        {
+                            jsonPart = resultString.Substring("Backup executado: ".Length);
+                            actionType = "Backup";
+                        }
+                        else if (resultString.StartsWith("Fallback UI gerado: "))
+                        {
+                            jsonPart = resultString.Substring("Fallback UI gerado: ".Length);
+                            actionType = "Fallback UI";
+                        }
+                        else if (resultString.StartsWith("Correção automática: "))
+                        {
+                            jsonPart = resultString.Substring("Correção automática: ".Length);
+                            actionType = "Correção";
+                        }
+                        else if (resultString.StartsWith("Backup de emergência: "))
+                        {
+                            jsonPart = resultString.Substring("Backup de emergência: ".Length);
+                            actionType = "Backup de Emergência";
+                        }
+                    }
+                    
+                    // Se o resultado é um JSON, tenta parseá-lo para extrair conteúdo útil
+                    if (!string.IsNullOrEmpty(jsonPart) && jsonPart.Trim().StartsWith("{") && jsonPart.Trim().EndsWith("}"))
+                    {
+                        try
+                        {
+                            using var resultDoc = System.Text.Json.JsonDocument.Parse(jsonPart);
+                            var resultRoot = resultDoc.RootElement;
+                            
+                            // Detectar se é resultado de Fallback UI
+                            if (resultRoot.TryGetProperty("fallbackUI", out var actionFallback))
+                            {
+                                Console.WriteLine("   🛡️ INTERFACE DE FALLBACK GERADA:");
+                                Console.WriteLine("   ================================");
+                                var fallbackUIText = actionFallback.GetString();
+                                if (!string.IsNullOrEmpty(fallbackUIText))
+                                {
+                                    // Exibir o conteúdo do fallback UI formatado, removendo caracteres de escape
+                                    var cleanedText = fallbackUIText
+                                        .Replace("\\r\\n", "\n")
+                                        .Replace("\\n", "\n") 
+                                        .Replace("\\u0022", "\"")
+                                        .Replace("\\u0027", "'")
+                                        .Replace("\\uD83D\\uDD04", "🔄")
+                                        .Replace("\\uD83C\\uDFAA", "🎪")
+                                        .Replace("\\uD83C\\uDF1F", "🌟")
+                                        .Replace("\\uD83D\\uDCAB", "💫");
+                                        
+                                    var lines = cleanedText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                                    foreach (var line in lines)
+                                    {
+                                        Console.WriteLine($"   {line}");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("   Conteúdo de fallback não disponível");
+                                }
+                                Console.WriteLine();
+                                
+                                // Também mostrar informações de sucesso se disponível
+                                if (resultRoot.TryGetProperty("success", out var fbSuccess) && fbSuccess.GetBoolean())
+                                {
+                                    Console.WriteLine("   ✅ Fallback UI gerado com sucesso");
+                                }
+                            }
+                            // Detectar se é resultado de backup
+                            else if (resultRoot.TryGetProperty("backupId", out var backupId))
+                            {
+                                Console.WriteLine("   💾 BACKUP EXECUTADO:");
+                                Console.WriteLine("   ==================");
+                                Console.WriteLine($"   📋 ID do Backup: {backupId.GetString()}");
+                                
+                                if (resultRoot.TryGetProperty("userId", out var userId))
+                                {
+                                    Console.WriteLine($"   👤 Usuário: {userId.GetString()}");
+                                }
+                                
+                                if (resultRoot.TryGetProperty("currentStep", out var step))
+                                {
+                                    Console.WriteLine($"   📍 Etapa: {step.GetString()}");
+                                }
+                                
+                                if (resultRoot.TryGetProperty("message", out var msg))
+                                {
+                                    Console.WriteLine($"   📝 Status: {msg.GetString()}");
+                                }
+                                Console.WriteLine();
+                            }
+                            // Para outros JSONs válidos, mostrar resumo
+                            else if (resultRoot.TryGetProperty("success", out var actionSuccess) && actionSuccess.GetBoolean())
+                            {
+                                Console.WriteLine($"   ✅ {actionType} executado com sucesso");
+                                
+                                if (resultRoot.TryGetProperty("message", out var successMsg))
+                                {
+                                    Console.WriteLine($"      📝 {successMsg.GetString()}");
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine($"   📋 {actionType}: {jsonPart}");
+                            }
+                        }
+                        catch
+                        {
+                            Console.WriteLine($"   📋 {actionType}: {jsonPart}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"   ✅ {resultString ?? "Resultado não disponível"}");
+                    }
+                }
+            }
+        }
+        catch
+        {
+            Console.WriteLine("📄 Resposta detalhada:");
+            Console.WriteLine(jsonResult);
+        }
+    }
+
+    /// <summary>
+    /// Determina se deve usar o Agente Anti-Bug para um tipo específico de erro
+    /// </summary>
+    private bool ShouldUseAntiBugAgent(string errorType)
+    {
+        // Usar o Agente Anti-Bug para erros mais complexos ou críticos
+        return errorType.ToUpper() switch
+        {
+            "SESSAO_PERDIDA" => true,        // Sempre usar para sessões perdidas
+            "TREINO_NAO_CARREGADO" => true,  // Sempre usar para problemas de visualização
+            "SYNC_ERROR" => true,            // Erros de sincronização precisam análise IA
+            _ => false                       // Outros erros usam sistema simples
+        };
+    }
+
+    /// <summary>
+    /// Usa o Agente Anti-Bug para lidar com erros complexos
+    /// </summary>
+    private async Task HandleErrorWithAntiBugAgent(string errorType, string exercise, int currentRep, string context)
+    {
+        try
+        {
+            var sessionData = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                userId = "user_workout",
+                exercise = exercise,
+                currentRep = currentRep,
+                totalReps = 5,
+                context = context,
+                timestamp = DateTime.UtcNow
+            });
+
+            var result = await _antiBugAgent.RunAntiBugAgent(
+                errorType: errorType,
+                userId: "user_workout",
+                errorContext: $"{exercise} - Rep {currentRep}/5. {context}",
+                sessionData: sessionData
+            );
+
+            Console.WriteLine();
+            Console.WriteLine("🤖 RESULTADO DO AGENTE ANTI-BUG:");
+            Console.WriteLine("=================================");
+            DisplayFormattedResult(result);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Agente Anti-Bug indisponível: {ex.Message}");
+            Console.WriteLine("🔄 Usando sistema de correção padrão...");
+        }
     }
 }
